@@ -82,12 +82,10 @@ button.icon { width: 42px; height: 42px; padding: 0; }
 .panel-head h2, .panel-head h3 { margin-right: auto; }
 
 /* Banner and navigation */
-.banner {
-  background: #070607 url(/art/banner.jpg) center / cover;
-  border-bottom: 1px solid var(--line);
-  overflow: hidden;
-}
-.banner img { width: 100%; max-width: 1536px; height: auto; min-height: 120px; object-fit: cover; object-position: 20% center; margin: 0 auto; box-shadow: 0 0 80px 40px #000a; }
+/* The banner fills the width; very wide screens crop its top and bottom
+   rather than repeating it at the sides. */
+.banner { background: #070607; border-bottom: 1px solid var(--line); overflow: hidden; }
+.banner img { width: 100%; height: clamp(120px, 15.1vw, 320px); object-fit: cover; object-position: 30% 40%; }
 .topnav {
   display: flex; align-items: stretch; gap: 2px; flex-wrap: wrap;
   background: linear-gradient(#151214, #0d0b0c);
