@@ -9,6 +9,9 @@ services:
     environment:
       PANEL_ADMIN_PASSWORD: ${PANEL_ADMIN_PASSWORD:?set in .env}
       PANEL_AGENT_TOKEN: ${PANEL_AGENT_TOKEN:?set in .env}
+      PANEL_DATA_DIR: /data/panel
+    volumes:
+      - ./data:/data
     restart: unless-stopped
 
   agent:
@@ -18,10 +21,13 @@ services:
       AGENT_PANEL_URL: ws://panel:8080/agent/connect
       AGENT_TOKEN: ${PANEL_AGENT_TOKEN:?set in .env}
       AGENT_NAME: local
+      AGENT_DATA_DIR: /srv/watchtower
     volumes:
-      # The agent will start game servers as sibling containers.
+      # The agent starts game servers as sibling containers through the host's Docker.
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./data:/data
+      # Game server files. Mounted at the same path inside and outside the
+      # container, because Docker resolves the servers' volume paths on the host.
+      - /srv/watchtower:/srv/watchtower
     depends_on:
       - panel
     restart: unless-stopped

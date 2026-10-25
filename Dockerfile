@@ -16,6 +16,8 @@ RUN CGO_ENABLED=0 go build -o /out/panel ./cmd/panel && CGO_ENABLED=0 go build -
 FROM debian:12-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
+# The agent drives Docker through its CLI to run game servers as sibling containers.
+COPY --from=docker:27-cli /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=go /out/panel /out/agent /usr/local/bin/
 COPY --from=web /src/web/dist web/dist
 COPY templates/ templates/

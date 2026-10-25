@@ -1,16 +1,20 @@
 id: minecraft-java
 name: Minecraft (Java Edition)
 description: Vanilla Minecraft Java server.
-image: eclipse-temurin:21-jre
+image: "eclipse-temurin:{{.javaVersion}}-jre"  # javaVersion comes from the release being installed
 install:
   method: mojang   # server.jar from Mojang's version manifest
-  version: latest
+  version: latest  # "latest" or a release such as 1.21.4
 start: java -Xmx{{.memory}} -jar server.jar nogui
 stop: stop
+files:
+  # Written before every start. Minecraft refuses to run until the EULA is accepted.
+  eula.txt: "eula={{.eula}}\n"
 ports:
   - { name: game, port: 25565, protocol: tcp }
-  - { name: rcon, port: 25575, protocol: tcp }
 config:
+  - { key: eula, label: "I accept the Minecraft EULA (https://aka.ms/MinecraftEULA)", type: bool, default: "false", required: true }
+  - { key: memory, label: Max memory, type: string, default: 2G }
   - { key: motd, label: Message of the day, type: string, default: "A Minecraft Server", file: server.properties }
   - { key: max-players, label: Max players, type: int, default: "20", file: server.properties }
   - { key: difficulty, label: Difficulty, type: select, default: normal, file: server.properties }
