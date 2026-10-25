@@ -35,6 +35,7 @@ type instance struct {
 	err     string
 	proc    Process
 	stopped chan struct{} // closed when proc exits
+	busy    string        // "backup" or "restore" while one runs
 }
 
 func NewManager(dataDir string, rt Runtime) *Manager {
@@ -110,10 +111,10 @@ func (m *Manager) Install(spec protocol.InstanceSpec) error {
 		return err
 	}
 	m.mu.Lock()
-	busy := in.state == protocol.StateInstalling || in.proc != nil
+	busy := in.state == protocol.StateInstalling || in.proc != nil || in.busy != ""
 	m.mu.Unlock()
 	if busy {
-		return errors.New("stop the server before installing or updating")
+		return errors.New("stop the server and wait for other jobs to finish before installing or updating")
 	}
 	m.setState(spec.ID, protocol.StateInstalling, "")
 	go func() {
@@ -137,11 +138,13 @@ func (m *Manager) Start(spec protocol.InstanceSpec) error {
 		return err
 	}
 	m.mu.Lock()
-	state, running := in.state, in.proc != nil
+	state, running, busy := in.state, in.proc != nil, in.busy
 	m.mu.Unlock()
 	switch {
 	case running:
 		return errors.New("already running")
+	case busy == "restore":
+		return errors.New("a restore is in progress")
 	case state == protocol.StateInstalling:
 		return errors.New("still installing")
 	case state == protocol.StateNotInstalled:
@@ -252,11 +255,14 @@ func (m *Manager) Delete(id string) error {
 	}
 	m.mu.Lock()
 	in, ok := m.instances[id]
-	if ok && (in.proc != nil || in.state == protocol.StateInstalling) {
+	if ok && (in.proc != nil || in.state == protocol.StateInstalling || in.busy != "") {
 		m.mu.Unlock()
-		return errors.New("stop the server before deleting it")
+		return errors.New("stop the server and wait for other jobs to finish before deleting it")
 	}
 	delete(m.instances, id)
 	m.mu.Unlock()
+	if err := os.RemoveAll(m.backupDir(id)); err != nil {
+		return err
+	}
 	return os.RemoveAll(m.dir(id))
 }

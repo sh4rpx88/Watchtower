@@ -42,9 +42,15 @@ var errAgentOffline = errors.New("agent is offline")
 
 // request sends a request to the agent and waits for its response.
 func (a *agentConn) request(ctx context.Context, msgType string, payload any) error {
+	_, err := a.call(ctx, msgType, payload)
+	return err
+}
+
+// call is request for requests that return data.
+func (a *agentConn) call(ctx context.Context, msgType string, payload any) (json.RawMessage, error) {
 	env, err := protocol.New(msgType, payload)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	env.ID = randomToken()[:16]
 	reply := make(chan protocol.Response, 1)
@@ -63,18 +69,18 @@ func (a *agentConn) request(ctx context.Context, msgType string, payload any) er
 	err = wsjson.Write(ctx, a.conn, env)
 	a.writeMu.Unlock()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	select {
 	case r := <-reply:
 		if !r.OK {
-			return errors.New(r.Error)
+			return nil, errors.New(r.Error)
 		}
-		return nil
+		return r.Data, nil
 	case <-ctx.Done():
-		return errors.New("agent did not answer in time")
+		return nil, errors.New("agent did not answer in time")
 	case <-a.ctx.Done():
-		return errAgentOffline
+		return nil, errAgentOffline
 	}
 }
 

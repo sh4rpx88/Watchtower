@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -26,7 +27,7 @@ type fakeRuntime struct{}
 
 func (fakeRuntime) Install(ctx context.Context, spec protocol.InstanceSpec, dir string, out func(string)) error {
 	out("fake install of " + spec.Template.ID)
-	return nil
+	return os.MkdirAll(dir, 0o755)
 }
 
 func (fakeRuntime) Start(spec protocol.InstanceSpec, dir string, out func(string)) (agent.Process, error) {
@@ -84,6 +85,23 @@ func (c *client) do(method, path string, body any, want int, out any) {
 	if out != nil {
 		json.Unmarshal(data, out)
 	}
+}
+
+// doRaw sends body as-is and returns the response body as a string.
+func (c *client) doRaw(method, path, body string, want int) string {
+	c.t.Helper()
+	req, _ := http.NewRequest(method, c.base+path, strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		c.t.Fatalf("%s %s: %v", method, path, err)
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != want {
+		c.t.Fatalf("%s %s: got %d want %d: %s", method, path, resp.StatusCode, want, data)
+	}
+	return string(data)
 }
 
 func (c *client) waitState(id, want string) {
@@ -226,10 +244,55 @@ func TestInstanceLifecycle(t *testing.T) {
 		}
 	}
 
+	// Files: write, read back, list.
+	c.doRaw("PUT", "/api/v1/instances/"+in.ID+"/files/content?path=ops.json", "[]", http.StatusOK)
+	if got := c.doRaw("GET", "/api/v1/instances/"+in.ID+"/files/content?path=ops.json", "", http.StatusOK); got != "[]" {
+		t.Fatalf("read back %q", got)
+	}
+	var files []protocol.FileInfo
+	c.do("GET", "/api/v1/instances/"+in.ID+"/files?path=/", nil, http.StatusOK, &files)
+	if len(files) != 1 || files[0].Name != "ops.json" {
+		t.Fatalf("files: %+v", files)
+	}
+
 	// Running servers can't be deleted.
 	c.do("DELETE", "/api/v1/instances/"+in.ID, nil, http.StatusConflict, nil)
 	c.do("POST", "/api/v1/instances/"+in.ID+"/stop", nil, http.StatusOK, nil)
 	c.waitState(in.ID, protocol.StateStopped)
+	// Backups: create one while stopped, see it listed, restore it, delete it.
+	c.do("POST", "/api/v1/instances/"+in.ID+"/backups", nil, http.StatusOK, nil)
+	var backups []protocol.BackupInfo
+	deadline := time.Now().Add(5 * time.Second)
+	for len(backups) == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("backup never appeared")
+		}
+		time.Sleep(20 * time.Millisecond)
+		c.do("GET", "/api/v1/instances/"+in.ID+"/backups", nil, http.StatusOK, &backups)
+	}
+	c.doRaw("PUT", "/api/v1/instances/"+in.ID+"/files/content?path=ops.json", "changed", http.StatusOK)
+	restoreDeadline := time.Now().Add(5 * time.Second)
+	for {
+		// The backup job may still be finishing; restore waits for it.
+		req, _ := http.NewRequest("POST", c.base+"/api/v1/instances/"+in.ID+"/backups/"+backups[0].Name+"/restore", nil)
+		req.Header.Set("Authorization", "Bearer "+c.token)
+		resp, err := http.DefaultClient.Do(req)
+		if err == nil && resp.StatusCode == http.StatusOK {
+			break
+		}
+		if time.Now().After(restoreDeadline) {
+			t.Fatal("restore never accepted")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	for c.doRaw("GET", "/api/v1/instances/"+in.ID+"/files/content?path=ops.json", "", http.StatusOK) != "[]" {
+		if time.Now().After(restoreDeadline) {
+			t.Fatal("restore didn't bring back the old file")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	c.do("DELETE", "/api/v1/instances/"+in.ID+"/backups/"+backups[0].Name, nil, http.StatusOK, nil)
+
 	c.do("DELETE", "/api/v1/instances/"+in.ID, nil, http.StatusNoContent, nil)
 	c.do("GET", "/api/v1/instances/"+in.ID, nil, http.StatusNotFound, nil)
 }
