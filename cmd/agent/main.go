@@ -16,6 +16,7 @@ func main() {
 		PanelURL: getenv("AGENT_PANEL_URL", "ws://localhost:8080/agent/connect"),
 		Token:    os.Getenv("AGENT_TOKEN"),
 		Name:     getenv("AGENT_NAME", host),
+		DataDir:  getenv("AGENT_DATA_DIR", "/srv/watchtower"),
 	}
 	if cfg.Token == "" {
 		slog.Error("AGENT_TOKEN must be set")

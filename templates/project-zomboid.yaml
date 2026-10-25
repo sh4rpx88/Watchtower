@@ -5,17 +5,21 @@ image: debian:12-slim
 install:
   method: steamcmd
   steamAppId: 380870
-start: ./start-server.sh -servername {{.instanceName}}
+env:
+  # Zomboid keeps saves and settings under $HOME/Zomboid; keep them in the instance folder.
+  HOME: /server
+start: ./start-server.sh -servername {{.servername}} -adminpassword {{.adminpassword}}
 stop: quit
 ports:
   - { name: game, port: 16261, protocol: udp }
   - { name: direct, port: 16262, protocol: udp }
-  - { name: rcon, port: 27015, protocol: tcp }
 config:
-  - { key: PublicName, label: Server name, type: string, default: "My PZ Server", file: "Zomboid/Server/{{.instanceName}}.ini" }
-  - { key: MaxPlayers, label: Max players, type: int, default: "16", file: "Zomboid/Server/{{.instanceName}}.ini" }
-  - { key: PVP, label: PvP, type: bool, default: "true", file: "Zomboid/Server/{{.instanceName}}.ini" }
-  - { key: Public, label: Listed publicly, type: bool, default: "false", file: "Zomboid/Server/{{.instanceName}}.ini" }
+  - { key: servername, label: Save name (letters and digits), type: string, default: servertest }
+  - { key: adminpassword, label: Admin password, type: string, default: "", required: true }
+  - { key: PublicName, label: Server name, type: string, default: "My PZ Server", file: "Zomboid/Server/{{.servername}}.ini" }
+  - { key: MaxPlayers, label: Max players, type: int, default: "16", file: "Zomboid/Server/{{.servername}}.ini" }
+  - { key: PVP, label: PvP, type: bool, default: "true", file: "Zomboid/Server/{{.servername}}.ini" }
+  - { key: Public, label: Listed publicly, type: bool, default: "false", file: "Zomboid/Server/{{.servername}}.ini" }
 stats:
   method: rcon
   port: rcon

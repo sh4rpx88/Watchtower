@@ -16,6 +16,7 @@ func main() {
 		AdminPassword: os.Getenv("PANEL_ADMIN_PASSWORD"),
 		AgentToken:    os.Getenv("PANEL_AGENT_TOKEN"),
 		WebDir:        getenv("PANEL_WEB_DIR", "web/dist"),
+		DataDir:       getenv("PANEL_DATA_DIR", "data/panel"),
 	}
 	if cfg.AdminPassword == "" || cfg.AgentToken == "" {
 		slog.Error("PANEL_ADMIN_PASSWORD and PANEL_AGENT_TOKEN must be set")
@@ -31,7 +32,12 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := panel.New(cfg).Run(ctx, getenv("PANEL_ADDR", ":8080")); err != nil {
+	srv, err := panel.New(cfg)
+	if err != nil {
+		slog.Error("starting panel", "err", err)
+		os.Exit(1)
+	}
+	if err := srv.Run(ctx, getenv("PANEL_ADDR", ":8080")); err != nil {
 		slog.Error("panel stopped", "err", err)
 		os.Exit(1)
 	}

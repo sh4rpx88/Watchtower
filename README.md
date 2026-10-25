@@ -3,7 +3,7 @@
 A self-hosted, open source web panel for running game servers, in the spirit of CubeCoders AMP.
 The first games are **Minecraft (Java)** and **Project Zomboid**, on Debian Linux with Docker.
 
-> Status: early skeleton. The panel and agent connect and you can log in. Installing and running game servers comes next.
+> Status: early. You can create Minecraft and Project Zomboid servers, install them, start and stop them, and use a live console. Config editing, backups, and the stats API come next.
 
 ## How it fits together
 
@@ -14,26 +14,31 @@ The first games are **Minecraft (Java)** and **Project Zomboid**, on Debian Linu
 
 ## Run it
 
+On a Debian machine with Docker installed:
+
 ```sh
-cp .env.example .env   # set a password and an agent token
+sudo mkdir -p /srv/watchtower   # game server files live here
+cp .env.example .env            # set a password and an agent token
 docker compose up -d
 ```
 
-Then open http://localhost:8080.
+Then open http://localhost:8080, click **New server**, pick a game, and press **Install**, then **Start**.
+Game servers run as their own containers named `watchtower-<id>` and keep running if the agent restarts.
+Remember to open the game ports (for example 25565/tcp for Minecraft, 16261-16262/udp for Project Zomboid) on your router or firewall.
 
 ## Develop
 
 ```sh
 go test ./...
 PANEL_ADMIN_PASSWORD=dev PANEL_AGENT_TOKEN=dev go run ./cmd/panel
-AGENT_TOKEN=dev go run ./cmd/agent
+AGENT_TOKEN=dev AGENT_DATA_DIR=$PWD/data/agent go run ./cmd/agent
 cd web && npm install && npm run dev   # UI on :5173, proxies /api to :8080
 ```
 
 ## Roadmap
 
-1. Skeleton: panel and agent connected, login, Docker Compose *(this)*
-2. First game end to end: install, start, stop, live console
+1. Skeleton: panel and agent connected, login, Docker Compose *(done)*
+2. First games end to end: install, start, stop, live console *(done)*
 3. Daily use: config editor, file manager, backups, stats API with tokens and webhooks
 4. Users: roles, per-instance access, audit log
 5. Scale out: remote agents, scheduler, auto-updates, Discord bot
