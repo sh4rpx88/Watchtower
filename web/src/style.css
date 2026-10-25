@@ -1,0 +1,8 @@
+:root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+body { margin: 0; padding: 24px; }
+main { max-width: 860px; margin: 0 auto; }
+header { display: flex; justify-content: space-between; align-items: center; }
+.card { border: 1px solid #8884; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+.login { max-width: 320px; margin: 15vh auto; display: flex; flex-direction: column; gap: 12px; }
+input, button { font: inherit; padding: 8px 12px; }
+.error { color: #c33; }

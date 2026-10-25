@@ -1,0 +1,6 @@
+/panel
+/agent
+/data/
+.env
+web/node_modules/
+web/dist/

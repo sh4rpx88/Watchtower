@@ -1,0 +1,20 @@
+id: minecraft-java
+name: Minecraft (Java Edition)
+description: Vanilla Minecraft Java server.
+image: eclipse-temurin:21-jre
+install:
+  method: mojang   # server.jar from Mojang's version manifest
+  version: latest
+start: java -Xmx{{.memory}} -jar server.jar nogui
+stop: stop
+ports:
+  - { name: game, port: 25565, protocol: tcp }
+  - { name: rcon, port: 25575, protocol: tcp }
+config:
+  - { key: motd, label: Message of the day, type: string, default: "A Minecraft Server", file: server.properties }
+  - { key: max-players, label: Max players, type: int, default: "20", file: server.properties }
+  - { key: difficulty, label: Difficulty, type: select, default: normal, file: server.properties }
+  - { key: online-mode, label: Online mode, type: bool, default: "true", file: server.properties }
+stats:
+  method: rcon
+  port: rcon

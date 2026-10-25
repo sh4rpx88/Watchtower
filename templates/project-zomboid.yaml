@@ -1,0 +1,21 @@
+id: project-zomboid
+name: Project Zomboid
+description: Project Zomboid dedicated server.
+image: debian:12-slim
+install:
+  method: steamcmd
+  steamAppId: 380870
+start: ./start-server.sh -servername {{.instanceName}}
+stop: quit
+ports:
+  - { name: game, port: 16261, protocol: udp }
+  - { name: direct, port: 16262, protocol: udp }
+  - { name: rcon, port: 27015, protocol: tcp }
+config:
+  - { key: PublicName, label: Server name, type: string, default: "My PZ Server", file: "Zomboid/Server/{{.instanceName}}.ini" }
+  - { key: MaxPlayers, label: Max players, type: int, default: "16", file: "Zomboid/Server/{{.instanceName}}.ini" }
+  - { key: PVP, label: PvP, type: bool, default: "true", file: "Zomboid/Server/{{.instanceName}}.ini" }
+  - { key: Public, label: Listed publicly, type: bool, default: "false", file: "Zomboid/Server/{{.instanceName}}.ini" }
+stats:
+  method: rcon
+  port: rcon
