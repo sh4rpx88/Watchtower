@@ -20,3 +20,5 @@ button.danger { color: #c33; }
 .console pre { background: #111; color: #ddd; padding: 12px; border-radius: 6px; height: 360px; overflow: auto; white-space: pre-wrap; font-size: 13px; margin: 0 0 8px; }
 .console form { display: flex; gap: 8px; }
 .console input { flex: 1; font-family: ui-monospace, monospace; }
+.settings { margin: 12px 0; }
+.settings summary { cursor: pointer; font-weight: 600; }

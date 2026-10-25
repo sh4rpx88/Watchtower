@@ -56,11 +56,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/instances", s.requireAuth(s.handleCreateInstance))
 	mux.HandleFunc("GET /api/v1/instances/{id}", s.requireAuth(s.handleGetInstance))
 	mux.HandleFunc("DELETE /api/v1/instances/{id}", s.requireAuth(s.handleDeleteInstance))
+	mux.HandleFunc("PUT /api/v1/instances/{id}/settings", s.requireAuth(s.handleUpdateSettings))
 	mux.HandleFunc("POST /api/v1/instances/{id}/{action}", s.requireAuth(s.handleAction))
 	mux.HandleFunc("GET /api/v1/instances/{id}/console", s.requireAuth(s.handleConsole))
 	mux.HandleFunc("GET /agent/connect", s.handleAgentConnect)
 	if s.cfg.WebDir != "" {
-		mux.Handle("/", http.FileServer(http.Dir(s.cfg.WebDir)))
+		mux.Handle("/", noCacheHTML(http.FileServer(http.Dir(s.cfg.WebDir))))
 	}
 	return mux
 }
@@ -135,6 +136,17 @@ func (s *Server) Run(ctx context.Context, addr string) error {
 		return err
 	}
 	return nil
+}
+
+// noCacheHTML makes browsers revalidate the page itself, so they pick up a new
+// build right away. Files under /assets/ have hashed names and cache as usual.
+func noCacheHTML(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/assets/") {
+			w.Header().Set("Cache-Control", "no-cache")
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

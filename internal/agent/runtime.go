@@ -224,6 +224,9 @@ func (d DockerRuntime) Start(spec protocol.InstanceSpec, dir string, out func(st
 	if err := writeFiles(spec, dir, vars); err != nil {
 		return nil, err
 	}
+	if err := writeConfigFiles(spec, dir, vars); err != nil {
+		return nil, err
+	}
 	// Clear a container left behind by a crash.
 	exec.Command("docker", "rm", "-f", containerName(spec.ID)).Run()
 	if b, err := exec.Command("docker", args...).CombinedOutput(); err != nil {
@@ -275,7 +278,7 @@ func (d DockerRuntime) Running(out func(id string) func(string)) (map[string]Pro
 // dockerRunArgs builds the docker run command line for an instance.
 func dockerRunArgs(spec protocol.InstanceSpec, dir string, vars map[string]string) ([]string, error) {
 	t := spec.Template
-	start, err := templates.Render(t.Start, vars)
+	start, err := templates.RenderShell(t.Start, vars)
 	if err != nil {
 		return nil, fmt.Errorf("start command: %w", err)
 	}
@@ -326,6 +329,75 @@ func writeFiles(spec protocol.InstanceSpec, dir string, vars map[string]string) 
 		}
 	}
 	return nil
+}
+
+// writeConfigFiles sets each config field that names a file as a key=value
+// line in that file, keeping every other line as it is. If the file doesn't
+// exist yet it is created; the game fills in the rest on first start.
+func writeConfigFiles(spec protocol.InstanceSpec, dir string, vars map[string]string) error {
+	byFile := map[string][]templates.ConfigField{}
+	var order []string
+	for _, f := range spec.Template.Config {
+		if f.File == "" {
+			continue
+		}
+		name, err := templates.Render(f.File, vars)
+		if err != nil {
+			return fmt.Errorf("config file for %s: %w", f.Key, err)
+		}
+		if _, seen := byFile[name]; !seen {
+			order = append(order, name)
+		}
+		byFile[name] = append(byFile[name], f)
+	}
+	for _, name := range order {
+		dest := filepath.Join(dir, filepath.Clean("/"+name))
+		existing, err := os.ReadFile(dest)
+		if err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		values := map[string]string{}
+		var keys []string
+		for _, f := range byFile[name] {
+			values[f.Key] = vars[f.Key]
+			keys = append(keys, f.Key)
+		}
+		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(dest, []byte(setKeyValues(string(existing), keys, values)), 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// setKeyValues updates key=value lines in contents, appending keys that are
+// missing in the given order. Comments, blank lines, and other keys are kept.
+func setKeyValues(contents string, keys []string, values map[string]string) string {
+	done := map[string]bool{}
+	lines := strings.Split(strings.TrimRight(contents, "\n"), "\n")
+	if contents == "" {
+		lines = nil
+	}
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, ";") {
+			continue
+		}
+		key, _, found := strings.Cut(trimmed, "=")
+		key = strings.TrimSpace(key)
+		if v, ok := values[key]; ok && found {
+			lines[i] = key + "=" + v
+			done[key] = true
+		}
+	}
+	for _, k := range keys {
+		if !done[k] {
+			lines = append(lines, k+"="+values[k])
+		}
+	}
+	return strings.Join(lines, "\n") + "\n"
 }
 
 type dockerProcess struct {

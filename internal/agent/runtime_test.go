@@ -43,7 +43,7 @@ func TestDockerRunArgsZomboid(t *testing.T) {
 		"-e HOME=/server",
 		"-p 17261:16261/udp",
 		"-p 16262:16262/udp",
-		"debian:12-slim sh -c exec ./start-server.sh -servername servertest -adminpassword secret",
+		"debian:12-slim sh -c exec ./start-server.sh -servername 'servertest' -adminpassword 'secret'",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)
@@ -95,7 +95,50 @@ func TestMinecraftImageUsesInstalledJavaVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(args, " "); !strings.Contains(got, "eclipse-temurin:25-jre sh -c exec java -Xmx2G -jar server.jar nogui") {
+	if got := strings.Join(args, " "); !strings.Contains(got, "eclipse-temurin:25-jre sh -c exec java -Xmx'2G' -jar server.jar nogui") {
 		t.Fatalf("unexpected args: %s", got)
+	}
+}
+
+func TestSetKeyValuesKeepsOtherLines(t *testing.T) {
+	in := "#Minecraft server properties\nmotd=Old\nlevel-seed=\nmax-players=20\n"
+	got := setKeyValues(in, []string{"motd", "pvp"}, map[string]string{"motd": "Hello = world", "pvp": "false"})
+	want := "#Minecraft server properties\nmotd=Hello = world\nlevel-seed=\nmax-players=20\npvp=false\n"
+	if got != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
+	}
+	if got := setKeyValues("", []string{"a"}, map[string]string{"a": "1"}); got != "a=1\n" {
+		t.Fatalf("new file: %q", got)
+	}
+}
+
+func TestWriteConfigFilesZomboidIni(t *testing.T) {
+	tpl := loadTemplate(t, "project-zomboid")
+	dir := t.TempDir()
+	spec := protocol.InstanceSpec{ID: "abcdef0123456789", Template: tpl,
+		Settings: tpl.Settings(map[string]string{"adminpassword": "x", "MaxPlayers": "8"})}
+	if err := writeConfigFiles(spec, dir, spec.Settings); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "Zomboid/Server/servertest.ini"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "MaxPlayers=8\n") || !strings.Contains(string(data), "PublicName=My PZ Server\n") {
+		t.Fatalf("unexpected ini:\n%s", data)
+	}
+}
+
+func TestStartCommandQuotesSettings(t *testing.T) {
+	tpl := loadTemplate(t, "project-zomboid")
+	spec := protocol.InstanceSpec{ID: "abcdef0123456789", Template: tpl,
+		Settings: tpl.Settings(map[string]string{"adminpassword": "it's a secret; rm -rf /"})}
+	args, err := dockerRunArgs(spec, "/d", spec.Settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `exec ./start-server.sh -servername 'servertest' -adminpassword 'it'\''s a secret; rm -rf /'`
+	if got := args[len(args)-1]; got != want {
+		t.Fatalf("got  %s\nwant %s", got, want)
 	}
 }

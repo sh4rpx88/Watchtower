@@ -21,6 +21,9 @@ type instanceView struct {
 }
 
 func (s *Server) view(in Instance) instanceView {
+	if tpl, ok := s.template(in.TemplateID); ok {
+		in.Settings = tpl.Settings(in.Settings)
+	}
 	return instanceView{Instance: in, AgentOnline: s.agent(in.Agent) != nil}
 }
 
@@ -137,7 +140,8 @@ func (s *Server) spec(in Instance) (protocol.InstanceSpec, error) {
 	if !ok {
 		return protocol.InstanceSpec{}, fmt.Errorf("game template %q is no longer available", in.TemplateID)
 	}
-	return protocol.InstanceSpec{ID: in.ID, Name: in.Name, Template: tpl, Settings: in.Settings, Ports: in.Ports}, nil
+	// Fill in defaults for fields added to the template after the instance was created.
+	return protocol.InstanceSpec{ID: in.ID, Name: in.Name, Template: tpl, Settings: tpl.Settings(in.Settings), Ports: in.Ports}, nil
 }
 
 // handleAction runs install, start, stop, or command on an instance's agent.
@@ -184,6 +188,45 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// handleUpdateSettings replaces an instance's settings. They apply the next
+// time the server starts.
+func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
+	in, ok := s.store.get(r.PathValue("id"))
+	if !ok {
+		writeError(w, http.StatusNotFound, "no such instance")
+		return
+	}
+	tpl, ok := s.template(in.TemplateID)
+	if !ok {
+		writeError(w, http.StatusConflict, "this game's template is no longer available")
+		return
+	}
+	var body map[string]string
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	// Start from the current settings so a partial update keeps the rest.
+	merged := map[string]string{}
+	for k, v := range in.Settings {
+		merged[k] = v
+	}
+	for k, v := range body {
+		merged[k] = v
+	}
+	settings := tpl.Settings(merged)
+	if err := tpl.Validate(settings); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if _, err := s.store.update(in.ID, func(in *Instance) { in.Settings = settings }); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	in.Settings = settings
+	writeJSON(w, http.StatusOK, s.view(in))
 }
 
 func (s *Server) handleDeleteInstance(w http.ResponseWriter, r *http.Request) {
