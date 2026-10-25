@@ -402,6 +402,18 @@ func TestStatsTokensAndWebhooks(t *testing.T) {
 	expect(EventPlayerLeave, "Alex")
 	c.waitState(in.ID, protocol.StateStopped)
 
+	// Recent activity lists events newest first, and read tokens may see it.
+	var recent []Event
+	reader.do("GET", "/api/v1/activity", nil, http.StatusOK, &recent)
+	if len(recent) == 0 || recent[0].Instance.ID != in.ID {
+		t.Fatalf("activity = %+v", recent)
+	}
+	for i := 1; i < len(recent); i++ {
+		if recent[i].Time.After(recent[i-1].Time) {
+			t.Fatalf("activity is not newest first: %+v", recent)
+		}
+	}
+
 	// Revoked tokens stop working.
 	var tokens []APIToken
 	c.do("GET", "/api/v1/tokens", nil, http.StatusOK, &tokens)

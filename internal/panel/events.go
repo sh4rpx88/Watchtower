@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -73,8 +74,36 @@ type Webhook struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+// activity keeps the most recent events for the dashboard, newest first.
+type activity struct {
+	mu     sync.Mutex
+	events []Event
+}
+
+const activitySize = 50
+
+func (a *activity) add(e Event) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.events = append([]Event{e}, a.events...)
+	if len(a.events) > activitySize {
+		a.events = a.events[:activitySize]
+	}
+}
+
+func (a *activity) list() []Event {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return append([]Event{}, a.events...)
+}
+
+func (s *Server) handleActivity(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.activity.list())
+}
+
 func (s *Server) emit(e Event) {
 	e.Time = time.Now().UTC()
+	s.activity.add(e)
 	select {
 	case s.events <- e:
 	default:

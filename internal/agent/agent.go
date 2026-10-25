@@ -114,9 +114,7 @@ func session(ctx context.Context, cfg Config, mgr *Manager, started time.Time) (
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for {
-		hb, _ := protocol.New(protocol.TypeHeartbeat, protocol.Heartbeat{
-			UptimeSeconds: int64(time.Since(started).Seconds()), NumCPU: runtime.NumCPU(),
-		})
+		hb, _ := protocol.New(protocol.TypeHeartbeat, hostStats(int64(time.Since(started).Seconds()), cfg.DataDir))
 		send(hb)
 		go mgr.reportResources()
 		select {

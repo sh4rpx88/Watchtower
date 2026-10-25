@@ -35,6 +35,7 @@ type Server struct {
 	tokens       *jsonList[APIToken]
 	webhooks     *jsonList[Webhook]
 	events       chan Event
+	activity     *activity
 
 	mu       sync.Mutex
 	agents   map[string]*agentConn
@@ -55,7 +56,7 @@ func New(cfg Config) (*Server, error) {
 		return nil, err
 	}
 	s := &Server{cfg: cfg, store: st, consoles: newConsoles(), statsTracker: newStatsTracker(),
-		tokens: tokens, webhooks: webhooks, events: make(chan Event, 256),
+		tokens: tokens, webhooks: webhooks, events: make(chan Event, 256), activity: &activity{},
 		agents: map[string]*agentConn{}, sessions: map[string]time.Time{}}
 	go s.deliverEvents(context.Background())
 	return s, nil
@@ -72,6 +73,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/agents", read(s.handleAgents))
 	mux.HandleFunc("GET /api/v1/templates", read(s.handleTemplates))
 	mux.HandleFunc("GET /api/v1/stats", read(s.handleAllStats))
+	mux.HandleFunc("GET /api/v1/activity", read(s.handleActivity))
 	mux.HandleFunc("GET /api/v1/instances", read(s.handleListInstances))
 	mux.HandleFunc("GET /api/v1/instances/{id}", read(s.handleGetInstance))
 	mux.HandleFunc("GET /api/v1/instances/{id}/stats", read(s.handleStats))

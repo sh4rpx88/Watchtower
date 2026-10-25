@@ -48,6 +48,15 @@ Server states: `not_installed`, `installing`, `stopped`, `starting`, `running`, 
 
 Players are followed from console output using each template's `stats` patterns, so the list starts empty if the panel
 restarts while a server is running and fills in as players join. CPU and memory come from `docker stats` every 10 seconds.
+`cpuPercent` is per core, as Docker reports it, so a server using two full cores shows 200.
+
+## Recent activity
+
+`GET /activity` (read) returns the last 50 events, newest first, in the same shape webhooks receive. It's kept in
+memory, so it starts empty when the panel restarts.
+
+`GET /agents` reports each machine's `numCpu`, and on Linux also `memoryTotal`, `diskTotal` and `diskFree` in bytes
+(disk is for the filesystem holding the agent's data directory).
 
 ## API tokens
 

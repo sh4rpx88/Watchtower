@@ -26,6 +26,9 @@ type Agent struct {
 	ConnectedAt   time.Time `json:"connectedAt"`
 	LastHeartbeat time.Time `json:"lastHeartbeat"`
 	NumCPU        int       `json:"numCpu"`
+	MemoryTotal   int64     `json:"memoryTotal,omitempty"`
+	DiskTotal     int64     `json:"diskTotal,omitempty"`
+	DiskFree      int64     `json:"diskFree,omitempty"`
 }
 
 // agentConn is a connected agent and the requests waiting on its replies.
@@ -163,7 +166,8 @@ func (s *Server) handleAgentMessage(a *agentConn, env protocol.Envelope) {
 		if json.Unmarshal(env.Payload, &hb) == nil {
 			s.mu.Lock()
 			a.info.LastHeartbeat = time.Now()
-			a.info.NumCPU = hb.NumCPU
+			a.info.NumCPU, a.info.MemoryTotal = hb.NumCPU, hb.MemoryTotal
+			a.info.DiskTotal, a.info.DiskFree = hb.DiskTotal, hb.DiskFree
 			s.mu.Unlock()
 		}
 	case protocol.TypeResponse:
