@@ -22,5 +22,8 @@ config:
   - { key: PVP, label: PvP, type: bool, default: "true", file: "Zomboid/Server/{{.servername}}.ini" }
   - { key: Public, label: Listed publicly, type: bool, default: "false", file: "Zomboid/Server/{{.servername}}.ini" }
 stats:
-  method: rcon
-  port: rcon
+  # Best effort: based on Project Zomboid's ConnectionManager log lines.
+  ready: 'SERVER STARTED'
+  join: 'ConnectionManager: \[fully-connected\].*username="(?P<player>[^"]+)"'
+  leave: 'ConnectionManager: \[disconnect\].*username="(?P<player>[^"]+)"'
+  maxPlayers: MaxPlayers

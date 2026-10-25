@@ -266,3 +266,23 @@ func (m *Manager) Delete(id string) error {
 	}
 	return os.RemoveAll(m.dir(id))
 }
+
+// reportResources sends CPU and memory for every running server.
+func (m *Manager) reportResources() {
+	m.mu.Lock()
+	var ids []string
+	for id, in := range m.instances {
+		if in.proc != nil {
+			ids = append(ids, id)
+		}
+	}
+	m.mu.Unlock()
+	res, err := m.runtime.Resources(ids)
+	if err != nil {
+		slog.Debug("reading resources", "err", err)
+		return
+	}
+	for _, r := range res {
+		m.emit(protocol.TypeResources, r)
+	}
+}

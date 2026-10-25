@@ -44,6 +44,11 @@ type fakeProcess struct {
 }
 
 func (p *fakeProcess) WriteLine(line string) error {
+	// "fake-out X" makes the server print X, to simulate game output.
+	if rest, ok := strings.CutPrefix(line, "fake-out "); ok {
+		p.out(rest)
+		return nil
+	}
 	p.out("echo: " + line)
 	if line == p.stopCmd {
 		p.once.Do(func() { close(p.done) })
@@ -53,6 +58,8 @@ func (p *fakeProcess) WriteLine(line string) error {
 func (p *fakeProcess) Wait() error      { <-p.done; return nil }
 func (p *fakeProcess) Kill() error      { p.once.Do(func() { close(p.done) }); return nil }
 func (p *fakeProcess) Terminate() error { return p.Kill() }
+
+func (fakeRuntime) Resources(ids []string) ([]protocol.Resources, error) { return nil, nil }
 
 func (fakeRuntime) Running(func(string) func(string)) (map[string]agent.Process, error) {
 	return nil, nil
@@ -308,4 +315,105 @@ func TestInstanceLifecycle(t *testing.T) {
 
 	c.do("DELETE", "/api/v1/instances/"+in.ID, nil, http.StatusNoContent, nil)
 	c.do("GET", "/api/v1/instances/"+in.ID, nil, http.StatusNotFound, nil)
+}
+
+func TestStatsTokensAndWebhooks(t *testing.T) {
+	c, done := setup(t)
+	defer done()
+
+	// Empty lists are [] rather than null, which the web UI relies on.
+	if got := strings.TrimSpace(c.doRaw("GET", "/api/v1/tokens", "", http.StatusOK)); got != "[]" {
+		t.Fatalf("empty tokens list = %s", got)
+	}
+
+	// A webhook receiver.
+	got := make(chan Event, 10)
+	hook := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var e Event
+		json.NewDecoder(r.Body).Decode(&e)
+		got <- e
+	}))
+	defer hook.Close()
+	c.do("POST", "/api/v1/webhooks", map[string]any{"name": "test", "url": hook.URL, "format": "json",
+		"events": []string{EventPlayerJoin, EventPlayerLeave, EventServerReady}}, http.StatusCreated, nil)
+	c.do("POST", "/api/v1/webhooks", map[string]any{"name": "bad", "url": "ftp://x", "format": "json"}, http.StatusBadRequest, nil)
+
+	var in instanceView
+	c.do("POST", "/api/v1/instances", map[string]any{"name": "Survival", "templateId": "minecraft-java", "agent": "local",
+		"settings": map[string]string{"eula": "true", "max-players": "10"}}, http.StatusCreated, &in)
+	c.do("POST", "/api/v1/instances/"+in.ID+"/install", nil, http.StatusOK, nil)
+	c.waitState(in.ID, protocol.StateStopped)
+	c.do("POST", "/api/v1/instances/"+in.ID+"/start", nil, http.StatusOK, nil)
+	c.waitState(in.ID, protocol.StateRunning)
+
+	say := func(line string) {
+		c.do("POST", "/api/v1/instances/"+in.ID+"/command", map[string]string{"line": "fake-out " + line}, http.StatusOK, nil)
+	}
+	expect := func(eventType, player string) {
+		t.Helper()
+		select {
+		case e := <-got:
+			if e.Type != eventType || e.Player != player || e.Instance.Name != "Survival" {
+				t.Fatalf("got event %+v, want %s %s", e, eventType, player)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("no %s event", eventType)
+		}
+	}
+	say("[12:00:00] [Server thread/INFO]: Done (3.2s)! For help, type \"help\"")
+	expect(EventServerReady, "")
+	say("[12:00:01] [Server thread/INFO]: Steve joined the game")
+	expect(EventPlayerJoin, "Steve")
+	say("[12:00:02] [Server thread/INFO]: <Steve> Alex joined the game") // chat, not a join
+	say("[12:00:03] [Server thread/INFO]: System chat: \x1b[0;33;22mAlex joined the game\x1b[m")
+	expect(EventPlayerJoin, "Alex")
+
+	var st Stats
+	c.do("GET", "/api/v1/instances/"+in.ID+"/stats", nil, http.StatusOK, &st)
+	if !st.Ready || st.PlayerCount != 2 || st.MaxPlayers != 10 || strings.Join(st.Players, ",") != "Alex,Steve" {
+		t.Fatalf("unexpected stats: %+v", st)
+	}
+
+	// API tokens: read can see stats but not control; control can run commands but not admin.
+	var created struct {
+		Token  APIToken
+		Secret string
+	}
+	c.do("POST", "/api/v1/tokens", map[string]string{"name": "discord bot", "scope": "read"}, http.StatusCreated, &created)
+	if !strings.HasPrefix(created.Secret, "wt_") || created.Token.Hash != "" {
+		t.Fatalf("unexpected token: %+v", created)
+	}
+	reader := &client{t: t, base: c.base, token: created.Secret}
+	var all []Stats
+	reader.do("GET", "/api/v1/stats", nil, http.StatusOK, &all)
+	if len(all) != 1 || all[0].PlayerCount != 2 {
+		t.Fatalf("stats via token: %+v", all)
+	}
+	reader.do("POST", "/api/v1/instances/"+in.ID+"/stop", nil, http.StatusForbidden, nil)
+	c.do("POST", "/api/v1/tokens", map[string]string{"name": "ops bot", "scope": "control"}, http.StatusCreated, &created)
+	controller := &client{t: t, base: c.base, token: created.Secret}
+	controller.do("POST", "/api/v1/instances/"+in.ID+"/command", map[string]string{"line": "fake-out [12:00:04] [Server thread/INFO]: Steve left the game"}, http.StatusOK, nil)
+	expect(EventPlayerLeave, "Steve")
+	controller.do("GET", "/api/v1/tokens", nil, http.StatusForbidden, nil)
+	controller.do("DELETE", "/api/v1/instances/"+in.ID, nil, http.StatusForbidden, nil)
+
+	// Stopping drops the remaining players.
+	c.do("POST", "/api/v1/instances/"+in.ID+"/stop", nil, http.StatusOK, nil)
+	expect(EventPlayerLeave, "Alex")
+	c.waitState(in.ID, protocol.StateStopped)
+
+	// Revoked tokens stop working.
+	var tokens []APIToken
+	c.do("GET", "/api/v1/tokens", nil, http.StatusOK, &tokens)
+	for _, tok := range tokens {
+		c.do("DELETE", "/api/v1/tokens/"+tok.ID, nil, http.StatusNoContent, nil)
+	}
+	reader.do("GET", "/api/v1/stats", nil, http.StatusUnauthorized, nil)
+}
+
+func TestDiscordText(t *testing.T) {
+	e := Event{Type: EventPlayerJoin, Instance: EventInstance{Name: "Survival"}, Player: "Steve", PlayerCount: 3, MaxPlayers: 20}
+	if got := e.Text(); got != "**Survival**: Steve joined (3/20 online)" {
+		t.Fatalf("got %q", got)
+	}
 }

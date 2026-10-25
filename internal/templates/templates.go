@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -54,10 +55,13 @@ type Install struct {
 	DownloadURL string `yaml:"downloadUrl,omitempty" json:"downloadUrl,omitempty"`
 }
 
-// Stats says how the agent reads player counts and similar figures.
+// Stats says how the panel follows players and readiness from console output.
+// Join and Leave must capture the player's name in a group named "player".
 type Stats struct {
-	Method string `yaml:"method" json:"method"` // rcon, query, or log
-	Port   string `yaml:"port" json:"port"`     // name of a port above
+	Ready      string `yaml:"ready,omitempty" json:"ready,omitempty"`           // line that means the server is accepting players
+	Join       string `yaml:"join,omitempty" json:"join,omitempty"`             // line that means a player joined
+	Leave      string `yaml:"leave,omitempty" json:"leave,omitempty"`           // line that means a player left
+	MaxPlayers string `yaml:"maxPlayers,omitempty" json:"maxPlayers,omitempty"` // setting key holding the player limit
 }
 
 // LoadDir reads every *.yaml file in dir, sorted by ID.
@@ -78,6 +82,11 @@ func LoadDir(dir string) ([]Template, error) {
 		}
 		if t.ID == "" {
 			return nil, fmt.Errorf("%s: missing id", f)
+		}
+		for _, re := range []string{t.Stats.Ready, t.Stats.Join, t.Stats.Leave} {
+			if _, err := regexp.Compile(re); err != nil {
+				return nil, fmt.Errorf("%s: stats pattern %q: %w", f, re, err)
+			}
 		}
 		out = append(out, t)
 	}

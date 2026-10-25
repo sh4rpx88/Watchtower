@@ -14,6 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,6 +31,8 @@ type Runtime interface {
 	// Running reattaches to servers left running by an earlier agent process,
 	// keyed by instance ID. out gives each one's console sink.
 	Running(out func(id string) func(string)) (map[string]Process, error)
+	// Resources reports CPU and memory for the given running instances.
+	Resources(ids []string) ([]protocol.Resources, error)
 }
 
 type Process interface {
@@ -233,6 +236,54 @@ func (d DockerRuntime) Start(spec protocol.InstanceSpec, dir string, out func(st
 		return nil, fmt.Errorf("docker run: %v: %s", err, strings.TrimSpace(string(b)))
 	}
 	return attach(spec.ID, out)
+}
+
+func (d DockerRuntime) Resources(ids []string) ([]protocol.Resources, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	args := []string{"stats", "--no-stream", "--format", "{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"}
+	for _, id := range ids {
+		args = append(args, containerName(id))
+	}
+	b, err := exec.Command("docker", args...).Output()
+	if err != nil {
+		return nil, fmt.Errorf("docker stats: %w", err)
+	}
+	return parseDockerStats(string(b)), nil
+}
+
+// parseDockerStats reads lines like "watchtower-abc\t3.25%\t1.2GiB / 15.5GiB".
+func parseDockerStats(out string) []protocol.Resources {
+	var res []protocol.Resources
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		f := strings.Split(line, "\t")
+		if len(f) != 3 || !strings.HasPrefix(f[0], "watchtower-") {
+			continue
+		}
+		cpu, _ := strconv.ParseFloat(strings.TrimSuffix(strings.TrimSpace(f[1]), "%"), 64)
+		used, _, _ := strings.Cut(f[2], "/")
+		res = append(res, protocol.Resources{ID: strings.TrimPrefix(f[0], "watchtower-"), CPUPercent: cpu, MemoryBytes: parseSize(strings.TrimSpace(used))})
+	}
+	return res
+}
+
+// parseSize reads docker's sizes such as "512MiB", "1.2GiB", or "800kB".
+func parseSize(s string) int64 {
+	units := []struct {
+		suffix string
+		mult   float64
+	}{{"KiB", 1 << 10}, {"MiB", 1 << 20}, {"GiB", 1 << 30}, {"TiB", 1 << 40}, {"kB", 1e3}, {"MB", 1e6}, {"GB", 1e9}, {"TB", 1e12}, {"B", 1}}
+	for _, u := range units {
+		if strings.HasSuffix(s, u.suffix) {
+			n, err := strconv.ParseFloat(strings.TrimSuffix(s, u.suffix), 64)
+			if err != nil {
+				return 0
+			}
+			return int64(n * u.mult)
+		}
+	}
+	return 0
 }
 
 // The server runs detached with stdin open, and the agent attaches to it. If

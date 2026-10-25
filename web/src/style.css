@@ -29,3 +29,12 @@ button.danger { color: #c33; }
 .files textarea { width: 100%; box-sizing: border-box; height: 420px; font-family: ui-monospace, monospace; font-size: 13px; }
 label.button { border: 1px solid #8886; border-radius: 3px; padding: 6px 10px; cursor: pointer; }
 .warning { color: #b7791f; }
+.integration { margin-top: 20px; }
+.integration h3 { margin-bottom: 4px; }
+.integration table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+.integration td { padding: 6px 4px; border-bottom: 1px solid #8882; }
+form.inline { display: flex; gap: 8px; flex-wrap: wrap; }
+form.inline input { flex: 1; min-width: 200px; }
+.checks { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.secret { background: #8881; padding: 8px; border-radius: 6px; word-break: break-all; }
+.stats { margin: 4px 0; }

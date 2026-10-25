@@ -3,7 +3,7 @@
 A self-hosted, open source web panel for running game servers, in the spirit of CubeCoders AMP.
 The first games are **Minecraft (Java)** and **Project Zomboid**, on Debian Linux with Docker.
 
-> Status: early. You can create Minecraft and Project Zomboid servers, install them, start and stop them, edit their settings, browse and edit their files, take and restore backups, and use a live console. The stats API for integrations comes next.
+> Status: early. You can create Minecraft and Project Zomboid servers, install them, start and stop them, edit their settings, browse and edit their files, take and restore backups, use a live console, and connect bots through API tokens, a stats API, and Discord-ready webhooks.
 
 ## How it fits together
 
@@ -40,7 +40,7 @@ cd web && npm install && npm run dev   # UI on :5173, proxies /api to :8080
 
 1. Skeleton: panel and agent connected, login, Docker Compose *(done)*
 2. First games end to end: install, start, stop, live console *(done)*
-3. Daily use: config editor, file manager, backups, stats API with tokens and webhooks
+3. Daily use: config editor, file manager, backups, stats API with tokens and webhooks *(done)*
 4. Users: roles, per-instance access, audit log
 5. Scale out: remote agents, scheduler, auto-updates, Discord bot
 

@@ -142,3 +142,10 @@ func TestStartCommandQuotesSettings(t *testing.T) {
 		t.Fatalf("got  %s\nwant %s", got, want)
 	}
 }
+
+func TestParseDockerStats(t *testing.T) {
+	got := parseDockerStats("watchtower-abcdef0123456789\t12.50%\t1.5GiB / 15.5GiB\nsomething-else\t1%\t1MiB / 2MiB\n")
+	if len(got) != 1 || got[0].ID != "abcdef0123456789" || got[0].CPUPercent != 12.5 || got[0].MemoryBytes != int64(1.5*(1<<30)) {
+		t.Fatalf("got %+v", got)
+	}
+}

@@ -33,8 +33,9 @@ const (
 	TypeResponse      = "response"       // agent -> panel, payload: Response
 
 	// Events from the agent.
-	TypeStatus  = "instance.status" // payload: Status
-	TypeConsole = "console.line"    // payload: ConsoleLine
+	TypeStatus    = "instance.status"    // payload: Status
+	TypeConsole   = "console.line"       // payload: ConsoleLine
+	TypeResources = "instance.resources" // payload: Resources
 )
 
 // Instance states.
@@ -135,6 +136,13 @@ type Status struct {
 	ID    string `json:"id"`
 	State string `json:"state"`
 	Error string `json:"error,omitempty"`
+}
+
+// Resources is a server's current CPU and memory use.
+type Resources struct {
+	ID          string  `json:"id"`
+	CPUPercent  float64 `json:"cpuPercent"`
+	MemoryBytes int64   `json:"memoryBytes"`
 }
 
 type ConsoleLine struct {
