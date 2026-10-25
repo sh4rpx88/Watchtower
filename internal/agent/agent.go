@@ -131,39 +131,93 @@ func session(ctx context.Context, cfg Config, mgr *Manager, started time.Time) (
 
 // handle carries out one request from the panel and sends the response.
 func handle(mgr *Manager, in protocol.Envelope, send func(protocol.Envelope)) {
-	var err error
-	switch in.Type {
-	case protocol.TypeInstall, protocol.TypeStart:
-		var spec protocol.InstanceSpec
-		if err = json.Unmarshal(in.Payload, &spec); err == nil {
-			if in.Type == protocol.TypeInstall {
-				err = mgr.Install(spec)
-			} else {
-				err = mgr.Start(spec)
-			}
-		}
-	case protocol.TypeStop, protocol.TypeDelete:
-		var ref protocol.InstanceRef
-		if err = json.Unmarshal(in.Payload, &ref); err == nil {
-			if in.Type == protocol.TypeStop {
-				err = mgr.Stop(ref.ID)
-			} else {
-				err = mgr.Delete(ref.ID)
-			}
-		}
-	case protocol.TypeCommand:
-		var c protocol.Command
-		if err = json.Unmarshal(in.Payload, &c); err == nil {
-			err = mgr.Command(c.ID, c.Line)
-		}
-	default:
-		err = fmt.Errorf("unknown request %q", in.Type)
-	}
+	data, err := dispatch(mgr, in)
 	resp := protocol.Response{OK: err == nil}
 	if err != nil {
 		resp.Error = err.Error()
+	} else if data != nil {
+		resp.Data, err = json.Marshal(data)
+		if err != nil {
+			resp = protocol.Response{Error: err.Error()}
+		}
 	}
 	out, _ := protocol.New(protocol.TypeResponse, resp)
 	out.ID = in.ID
 	send(out)
+}
+
+// decode unmarshals a request payload into a new T.
+func decode[T any](raw json.RawMessage) (T, error) {
+	var v T
+	err := json.Unmarshal(raw, &v)
+	return v, err
+}
+
+func dispatch(mgr *Manager, in protocol.Envelope) (any, error) {
+	switch in.Type {
+	case protocol.TypeInstall, protocol.TypeStart, protocol.TypeBackupCreate:
+		spec, err := decode[protocol.InstanceSpec](in.Payload)
+		if err != nil {
+			return nil, err
+		}
+		switch in.Type {
+		case protocol.TypeInstall:
+			return nil, mgr.Install(spec)
+		case protocol.TypeStart:
+			return nil, mgr.Start(spec)
+		default:
+			return nil, mgr.CreateBackup(spec)
+		}
+	case protocol.TypeStop, protocol.TypeDelete, protocol.TypeBackupList:
+		ref, err := decode[protocol.InstanceRef](in.Payload)
+		if err != nil {
+			return nil, err
+		}
+		switch in.Type {
+		case protocol.TypeStop:
+			return nil, mgr.Stop(ref.ID)
+		case protocol.TypeDelete:
+			return nil, mgr.Delete(ref.ID)
+		default:
+			return mgr.ListBackups(ref.ID)
+		}
+	case protocol.TypeCommand:
+		c, err := decode[protocol.Command](in.Payload)
+		if err != nil {
+			return nil, err
+		}
+		return nil, mgr.Command(c.ID, c.Line)
+	case protocol.TypeFileList, protocol.TypeFileRead, protocol.TypeFileDelete, protocol.TypeFileMkdir:
+		req, err := decode[protocol.FileRequest](in.Payload)
+		if err != nil {
+			return nil, err
+		}
+		switch in.Type {
+		case protocol.TypeFileList:
+			return mgr.ListFiles(req)
+		case protocol.TypeFileRead:
+			return mgr.ReadFile(req)
+		case protocol.TypeFileDelete:
+			return nil, mgr.DeleteFile(req)
+		default:
+			return nil, mgr.Mkdir(req)
+		}
+	case protocol.TypeFileWrite:
+		req, err := decode[protocol.FileContent](in.Payload)
+		if err != nil {
+			return nil, err
+		}
+		return nil, mgr.WriteFile(req)
+	case protocol.TypeBackupRestore, protocol.TypeBackupDelete:
+		req, err := decode[protocol.BackupRequest](in.Payload)
+		if err != nil {
+			return nil, err
+		}
+		if in.Type == protocol.TypeBackupRestore {
+			return nil, mgr.RestoreBackup(req)
+		}
+		return nil, mgr.DeleteBackup(req)
+	default:
+		return nil, fmt.Errorf("unknown request %q", in.Type)
+	}
 }

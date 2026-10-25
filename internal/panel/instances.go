@@ -1,6 +1,7 @@
 package panel
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -169,6 +170,10 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		}
 	case "stop":
 		err = a.request(r.Context(), protocol.TypeStop, protocol.InstanceRef{ID: in.ID})
+	case "restart":
+		if err = a.request(r.Context(), protocol.TypeStop, protocol.InstanceRef{ID: in.ID}); err == nil {
+			go s.startWhenStopped(in.ID)
+		}
 	case "command":
 		var body struct {
 			Line string `json:"line"`
@@ -227,6 +232,44 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	in.Settings = settings
 	writeJSON(w, http.StatusOK, s.view(in))
+}
+
+// restartTimeout covers the agent's 60 s stop grace period plus slack.
+const restartTimeout = 90 * time.Second
+
+// startWhenStopped finishes a restart: it waits for the instance to report
+// stopped, then starts it again with its current settings.
+func (s *Server) startWhenStopped(id string) {
+	deadline := time.Now().Add(restartTimeout)
+	for {
+		in, ok := s.store.get(id)
+		if !ok {
+			return
+		}
+		switch in.State {
+		case protocol.StateStopped:
+			a := s.agent(in.Agent)
+			spec, err := s.spec(in)
+			if err == nil && a == nil {
+				err = errAgentOffline
+			}
+			if err == nil {
+				err = a.request(context.Background(), protocol.TypeStart, spec)
+			}
+			if err != nil {
+				s.consoles.append(id, "Restart failed: "+err.Error())
+			}
+			return
+		case protocol.StateError, protocol.StateNotInstalled:
+			s.consoles.append(id, "Restart cancelled: the server is in state "+in.State)
+			return
+		}
+		if time.Now().After(deadline) {
+			s.consoles.append(id, "Restart cancelled: the server took too long to stop")
+			return
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
 }
 
 func (s *Server) handleDeleteInstance(w http.ResponseWriter, r *http.Request) {

@@ -1,5 +1,7 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Agent, ApiError, ConfigField, Instance, Template, api, consoleURL, login } from "./api";
+import Backups from "./Backups";
+import Files from "./Files";
 
 export default function App() {
   const [token, setToken] = useState(() => sessionStorage.getItem("token") ?? "");
@@ -316,15 +318,12 @@ function ServerSettings({
   }
 
   return (
-    <details className="settings">
-      <summary>Settings</summary>
-      <form className="create" onSubmit={save}>
-        <SettingsFields fields={template.config} values={values} onChange={setValues} />
-        <button type="submit">Save settings</button>
-        {message && <p className="muted">{message}</p>}
-        {error && <p className="error">{error}</p>}
-      </form>
-    </details>
+    <form className="create" onSubmit={save}>
+      <SettingsFields fields={template.config} values={values} onChange={setValues} />
+      <button type="submit">Save settings</button>
+      {message && <p className="muted">{message}</p>}
+      {error && <p className="error">{error}</p>}
+    </form>
   );
 }
 
@@ -345,7 +344,9 @@ function ServerView({
 }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState<"console" | "settings" | "files" | "backups">("console");
   const s = instance.state;
+  const installed = s !== "not_installed" && s !== "installing";
 
   async function act(path: string, method = "POST", body?: unknown) {
     setError("");
@@ -363,7 +364,7 @@ function ServerView({
   }
 
   async function remove() {
-    if (!confirm(`Delete ${instance.name} and all of its files? This cannot be undone.`)) return;
+    if (!confirm(`Delete ${instance.name}, all of its files, and all of its backups? This cannot be undone.`)) return;
     if (await act("", "DELETE")) onBack();
   }
 
@@ -398,13 +399,31 @@ function ServerView({
         <button disabled={busy || !canStop} onClick={() => act("/stop")}>
           Stop
         </button>
+        <button disabled={busy || s !== "running"} onClick={() => act("/restart")}>
+          Restart
+        </button>
         <button disabled={busy || canStop || s === "installing"} className="danger" onClick={remove}>
           Delete
         </button>
       </div>
       {error && <p className="error">{error}</p>}
-      {template && <ServerSettings key={instance.id} token={token} instance={instance} template={template} onSaved={onChanged} />}
-      <Console token={token} id={instance.id} running={s === "running"} onSend={(line) => act("/command", "POST", { line })} />
+      <nav className="tabs">
+        {(["console", "settings", "files", "backups"] as const).map((t) => (
+          <button key={t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
+            {t[0].toUpperCase() + t.slice(1)}
+          </button>
+        ))}
+      </nav>
+      {tab === "console" && (
+        <Console token={token} id={instance.id} running={s === "running"} onSend={(line) => act("/command", "POST", { line })} />
+      )}
+      {tab === "settings" && template && (
+        <ServerSettings key={instance.id} token={token} instance={instance} template={template} onSaved={onChanged} />
+      )}
+      {tab === "files" &&
+        (installed && instance.agentOnline ? <Files token={token} instance={instance} template={template} /> : <p className="muted">Install the server and keep its machine online to manage files.</p>)}
+      {tab === "backups" &&
+        (installed && instance.agentOnline ? <Backups token={token} instance={instance} /> : <p className="muted">Install the server and keep its machine online to manage backups.</p>)}
     </section>
   );
 }

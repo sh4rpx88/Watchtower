@@ -15,6 +15,7 @@ export type ConfigField = {
   type: "string" | "int" | "bool" | "select";
   default: string;
   options?: string[];
+  file?: string;
   required?: boolean;
 };
 
@@ -75,4 +76,24 @@ export async function api<T>(token: string, method: string, path: string, body?:
 export function consoleURL(token: string, id: string): string {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   return `${proto}//${location.host}/api/v1/instances/${id}/console?access_token=${encodeURIComponent(token)}`;
+}
+
+export type FileInfo = { name: string; dir: boolean; size: number; modTime: number };
+export type BackupInfo = { name: string; size: number; createdAt: number };
+
+// raw sends or fetches a file's bytes rather than JSON.
+export async function raw(token: string, method: string, path: string, body?: BodyInit): Promise<Response> {
+  const res = await fetch(`/api/v1${path}`, { method, headers: { Authorization: `Bearer ${token}` }, body });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new ApiError(err.error ?? `${method} ${path}: ${res.status}`, res.status);
+  }
+  return res;
+}
+
+export function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1 << 20) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1 << 30) return `${(bytes / (1 << 20)).toFixed(1)} MB`;
+  return `${(bytes / (1 << 30)).toFixed(2)} GB`;
 }

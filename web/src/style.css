@@ -20,5 +20,12 @@ button.danger { color: #c33; }
 .console pre { background: #111; color: #ddd; padding: 12px; border-radius: 6px; height: 360px; overflow: auto; white-space: pre-wrap; font-size: 13px; margin: 0 0 8px; }
 .console form { display: flex; gap: 8px; }
 .console input { flex: 1; font-family: ui-monospace, monospace; }
-.settings { margin: 12px 0; }
-.settings summary { cursor: pointer; font-weight: 600; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid #8884; margin: 16px 0 12px; }
+.tabs button { border: none; background: none; padding: 8px 14px; cursor: pointer; border-bottom: 2px solid transparent; }
+.tabs button.active { border-bottom-color: currentColor; font-weight: 600; }
+.files table, .backups table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+.files td, .backups td { padding: 6px 4px; border-bottom: 1px solid #8882; }
+.files td.actions, .backups td.actions { justify-content: flex-end; margin: 0; }
+.files textarea { width: 100%; box-sizing: border-box; height: 420px; font-family: ui-monospace, monospace; font-size: 13px; }
+label.button { border: 1px solid #8886; border-radius: 3px; padding: 6px 10px; cursor: pointer; }
+.warning { color: #b7791f; }

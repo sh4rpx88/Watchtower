@@ -6,6 +6,7 @@ install:
   method: mojang   # server.jar from Mojang's version manifest
   version: latest  # "latest" or a release such as 1.21.4
 start: java -Xmx{{.memory}} -jar server.jar nogui
+save: save-all flush
 stop: stop
 files:
   # Written before every start. Minecraft refuses to run until the EULA is accepted.

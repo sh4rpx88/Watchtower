@@ -40,7 +40,8 @@ type Template struct {
 	Env         map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
 	Files       map[string]string `yaml:"files,omitempty" json:"files,omitempty"` // path -> contents, written before each start
 	Start       string            `yaml:"start" json:"start"`
-	Stop        string            `yaml:"stop" json:"stop"` // console command for a clean shutdown
+	Stop        string            `yaml:"stop" json:"stop"`                     // console command for a clean shutdown
+	Save        string            `yaml:"save,omitempty" json:"save,omitempty"` // console command that flushes the world to disk, sent before backups
 	Ports       []Port            `yaml:"ports" json:"ports"`
 	Config      []ConfigField     `yaml:"config" json:"config"`
 	Stats       Stats             `yaml:"stats" json:"stats"`

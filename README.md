@@ -3,7 +3,7 @@
 A self-hosted, open source web panel for running game servers, in the spirit of CubeCoders AMP.
 The first games are **Minecraft (Java)** and **Project Zomboid**, on Debian Linux with Docker.
 
-> Status: early. You can create Minecraft and Project Zomboid servers, install them, start and stop them, edit their settings, and use a live console. Backups, a file manager, and the stats API come next.
+> Status: early. You can create Minecraft and Project Zomboid servers, install them, start and stop them, edit their settings, browse and edit their files, take and restore backups, and use a live console. The stats API for integrations comes next.
 
 ## How it fits together
 
@@ -24,6 +24,7 @@ docker compose up -d
 
 Then open http://localhost:8080, click **New server**, pick a game, and press **Install**, then **Start**.
 Game servers run as their own containers named `watchtower-<id>` and keep running if the agent restarts.
+Server files live in `/srv/watchtower/instances/` and backups in `/srv/watchtower/backups/`; keep an eye on disk space.
 Remember to open the game ports (for example 25565/tcp for Minecraft, 16261-16262/udp for Project Zomboid) on your router or firewall.
 
 ## Develop

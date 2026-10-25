@@ -14,12 +14,23 @@ const (
 	TypeHeartbeat = "heartbeat" // agent -> panel, periodic host stats
 
 	// Requests from the panel. Each carries an ID and gets a TypeResponse with the same ID.
-	TypeInstall  = "instance.install" // payload: InstanceSpec
-	TypeStart    = "instance.start"   // payload: InstanceSpec
-	TypeStop     = "instance.stop"    // payload: InstanceRef
-	TypeCommand  = "instance.command" // payload: Command
-	TypeDelete   = "instance.delete"  // payload: InstanceRef
-	TypeResponse = "response"         // agent -> panel, payload: Response
+	TypeInstall = "instance.install" // payload: InstanceSpec
+	TypeStart   = "instance.start"   // payload: InstanceSpec
+	TypeStop    = "instance.stop"    // payload: InstanceRef
+	TypeCommand = "instance.command" // payload: Command
+	TypeDelete  = "instance.delete"  // payload: InstanceRef
+
+	TypeFileList   = "file.list"   // payload: FileRequest; response data: []FileInfo
+	TypeFileRead   = "file.read"   // payload: FileRequest; response data: FileContent
+	TypeFileWrite  = "file.write"  // payload: FileContent
+	TypeFileDelete = "file.delete" // payload: FileRequest
+	TypeFileMkdir  = "file.mkdir"  // payload: FileRequest
+
+	TypeBackupCreate  = "backup.create"  // payload: InstanceSpec; runs in the background
+	TypeBackupList    = "backup.list"    // payload: InstanceRef; response data: []BackupInfo
+	TypeBackupRestore = "backup.restore" // payload: BackupRequest
+	TypeBackupDelete  = "backup.delete"  // payload: BackupRequest
+	TypeResponse      = "response"       // agent -> panel, payload: Response
 
 	// Events from the agent.
 	TypeStatus  = "instance.status" // payload: Status
@@ -84,8 +95,40 @@ type Command struct {
 }
 
 type Response struct {
-	OK    bool   `json:"ok"`
-	Error string `json:"error,omitempty"`
+	OK    bool            `json:"ok"`
+	Error string          `json:"error,omitempty"`
+	Data  json.RawMessage `json:"data,omitempty"`
+}
+
+// FileRequest names a path inside an instance's folder.
+type FileRequest struct {
+	ID   string `json:"id"`
+	Path string `json:"path"`
+}
+
+type FileInfo struct {
+	Name    string `json:"name"`
+	Dir     bool   `json:"dir"`
+	Size    int64  `json:"size"`
+	ModTime int64  `json:"modTime"` // unix seconds
+}
+
+// FileContent carries a file's bytes (base64 in JSON).
+type FileContent struct {
+	ID      string `json:"id"`
+	Path    string `json:"path"`
+	Content []byte `json:"content"`
+}
+
+type BackupInfo struct {
+	Name      string `json:"name"`
+	Size      int64  `json:"size"`
+	CreatedAt int64  `json:"createdAt"` // unix seconds
+}
+
+type BackupRequest struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 type Status struct {
