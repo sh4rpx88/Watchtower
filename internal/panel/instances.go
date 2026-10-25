@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -108,6 +109,7 @@ func (s *Server) handleCreateInstance(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, err.Error())
 		return
 	}
+	noteFor(r).instance = in
 	writeJSON(w, http.StatusCreated, s.view(*in))
 }
 
@@ -183,6 +185,7 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.consoles.append(in.ID, "> "+body.Line)
+		noteFor(r).text = strconv.Quote(body.Line)
 		err = a.request(r.Context(), protocol.TypeCommand, protocol.Command{ID: in.ID, Line: body.Line})
 	default:
 		writeError(w, http.StatusNotFound, "unknown action")

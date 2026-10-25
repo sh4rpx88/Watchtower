@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -21,6 +20,9 @@ const (
 	EventServerReady   = "server.ready"
 	EventServerStopped = "server.stopped"
 	EventServerCrashed = "server.crashed"
+	// EventAction is something a person or API token did, for the activity
+	// log. Webhooks don't receive these.
+	EventAction = "action"
 )
 
 var eventTypes = []string{EventPlayerJoin, EventPlayerLeave, EventServerReady, EventServerStopped, EventServerCrashed}
@@ -34,11 +36,13 @@ type EventInstance struct {
 type Event struct {
 	Type        string        `json:"type"`
 	Time        time.Time     `json:"time"`
-	Instance    EventInstance `json:"instance"`
+	Instance    EventInstance `json:"instance,omitzero"`
 	Player      string        `json:"player,omitempty"`
 	PlayerCount int           `json:"playerCount"`
 	MaxPlayers  int           `json:"maxPlayers,omitempty"`
 	Error       string        `json:"error,omitempty"`
+	Actor       string        `json:"actor,omitempty"`   // for actions: the username, or "token <name>"
+	Message     string        `json:"message,omitempty"` // for actions: what they did, e.g. "started the server"
 }
 
 // Text is a one-line summary, used for Discord messages.
@@ -59,6 +63,11 @@ func (e Event) Text() string {
 		return fmt.Sprintf("%s stopped", name)
 	case EventServerCrashed:
 		return fmt.Sprintf("%s crashed: %s", name, e.Error)
+	case EventAction:
+		if e.Instance.Name == "" {
+			return e.Actor + " " + e.Message
+		}
+		return fmt.Sprintf("%s: %s %s", name, e.Actor, e.Message)
 	}
 	return name + ": " + e.Type
 }
@@ -74,36 +83,8 @@ type Webhook struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
-// activity keeps the most recent events for the dashboard, newest first.
-type activity struct {
-	mu     sync.Mutex
-	events []Event
-}
-
-const activitySize = 50
-
-func (a *activity) add(e Event) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.events = append([]Event{e}, a.events...)
-	if len(a.events) > activitySize {
-		a.events = a.events[:activitySize]
-	}
-}
-
-func (a *activity) list() []Event {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return append([]Event{}, a.events...)
-}
-
-func (s *Server) handleActivity(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.activity.list())
-}
-
 func (s *Server) emit(e Event) {
-	e.Time = time.Now().UTC()
-	s.activity.add(e)
+	e = s.activity.add(e)
 	select {
 	case s.events <- e:
 	default:
@@ -190,13 +171,19 @@ func (s *Server) handleCreateWebhook(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	noteFor(r).text = h.Name
 	writeJSON(w, http.StatusCreated, h)
 }
 
 func (s *Server) handleDeleteWebhook(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("webhookId")
 	err := s.webhooks.change(func(hs []Webhook) []Webhook {
-		return slices.DeleteFunc(hs, func(h Webhook) bool { return h.ID == id })
+		return slices.DeleteFunc(hs, func(h Webhook) bool {
+			if h.ID == id {
+				noteFor(r).text = h.Name
+			}
+			return h.ID == id
+		})
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

@@ -1,7 +1,5 @@
-import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity,
-  AlertTriangle,
   Archive,
   Boxes,
   Cpu,
@@ -22,8 +20,8 @@ import {
   Square,
   SquareTerminal,
   Trash2,
-  UserMinus,
-  UserPlus,
+  ScrollText,
+  UserCog,
   Users,
 } from "lucide-react";
 import {
@@ -39,8 +37,10 @@ import {
   formatDuration,
   formatSize,
   login,
+  Me,
   parseSize,
 } from "./api";
+import { Account, ActivityItem, ActivityLog, UserList } from "./People";
 import Backups from "./Backups";
 import Files from "./Files";
 import Integrations from "./Integrations";
@@ -48,6 +48,8 @@ import Integrations from "./Integrations";
 export default function App() {
   const [token, setToken] = useState(() => sessionStorage.getItem("token") ?? "");
   const logout = useCallback(() => {
+    const t = sessionStorage.getItem("token");
+    if (t) fetch("/api/v1/logout", { method: "POST", headers: { Authorization: `Bearer ${t}` } }).catch(() => {});
     sessionStorage.removeItem("token");
     setToken("");
   }, []);
@@ -73,12 +75,13 @@ function Banner() {
 }
 
 function Login({ onLogin }: { onLogin: (token: string) => void }) {
+  const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   async function submit(e: FormEvent) {
     e.preventDefault();
     try {
-      onLogin(await login(password));
+      onLogin(await login(username, password));
     } catch (err) {
       setError((err as Error).message);
     }
@@ -88,7 +91,15 @@ function Login({ onLogin }: { onLogin: (token: string) => void }) {
       <Banner />
       <form className="card login" onSubmit={submit}>
         <h2>Enter the keep</h2>
-        <input type="password" placeholder="Admin password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus />
+        <input placeholder="Username" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} />
+        <input
+          type="password"
+          placeholder="Password"
+          autoComplete="current-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoFocus
+        />
         <button type="submit" className="primary">
           Log in
         </button>
@@ -109,14 +120,25 @@ const stateLabels: Record<string, string> = {
 };
 
 type Tab = "console" | "settings" | "files" | "backups";
-type View = { page: "overview" | "servers" | "machines" | "integrations" } | { page: "server"; id: string; tab: Tab };
+type Page = "overview" | "servers" | "machines" | "activity" | "integrations" | "users" | "account";
+type View = { page: Page } | { page: "server"; id: string; tab: Tab };
 
-const tabs: { id: Tab; label: string; icon: ReactNode }[] = [
-  { id: "console", label: "Console", icon: <SquareTerminal size={16} /> },
-  { id: "settings", label: "Settings", icon: <Settings size={16} /> },
-  { id: "files", label: "File Manager", icon: <FolderOpen size={16} /> },
-  { id: "backups", label: "Backups", icon: <Archive size={16} /> },
+const tabs: { id: Tab; label: string; icon: ReactNode; need: keyof Perms }[] = [
+  { id: "console", label: "Console", icon: <SquareTerminal size={16} />, need: "control" },
+  { id: "settings", label: "Settings", icon: <Settings size={16} />, need: "manage" },
+  { id: "files", label: "File Manager", icon: <FolderOpen size={16} />, need: "manage" },
+  { id: "backups", label: "Backups", icon: <Archive size={16} />, need: "manage" },
 ];
+
+// Perms says what the logged-in user may do, so the UI hides what they can't.
+type Perms = { control: boolean; manage: boolean; admin: boolean };
+const PermsContext = createContext<Perms>({ control: false, manage: false, admin: false });
+const usePerms = () => useContext(PermsContext);
+
+function permsFor(me: Me | null): Perms {
+  const role = me?.role;
+  return { control: role === "operator" || role === "admin", manage: role === "operator" || role === "admin", admin: role === "admin" };
+}
 
 const knownArt = new Set(["minecraft-java", "project-zomboid", "7-days-to-die", "ark"]);
 const gameArt = (templateId: string) => (knownArt.has(templateId) ? `/art/${templateId}.jpg` : "/art/keep.jpg");
@@ -134,6 +156,14 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const [data, setData] = useState<Data>({ agents: [], templates: [], instances: [], stats: {}, activity: [] });
   const [view, setView] = useState<View>({ page: "overview" });
   const [creating, setCreating] = useState(false);
+  const [me, setMe] = useState<Me | null>(null);
+  const perms = permsFor(me);
+
+  useEffect(() => {
+    api<Me>(token, "GET", "/me").then(setMe, (err) => {
+      if (err instanceof ApiError && err.status === 401) onLogout();
+    });
+  }, [token, onLogout]);
 
   const load = useCallback(async () => {
     try {
@@ -187,103 +217,117 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
     />
   );
 
+  const nav: [Page, string, ReactNode, boolean][] = [
+    ["overview", "Dashboard", <LayoutDashboard size={18} key="i" />, true],
+    ["servers", "Servers", <ServerIcon size={18} key="i" />, true],
+    ["machines", "Machines", <Boxes size={18} key="i" />, true],
+    ["activity", "Activity", <ScrollText size={18} key="i" />, true],
+    ["integrations", "Integrations", <Plug size={18} key="i" />, perms.admin],
+    ["users", "Users", <UserCog size={18} key="i" />, perms.admin],
+  ];
+
   return (
-    <div className="shell">
-      <Banner />
-      <nav className="topnav">
-        {(
-          [
-            ["overview", "Dashboard", <LayoutDashboard size={18} key="i" />],
-            ["servers", "Servers", <ServerIcon size={18} key="i" />],
-            ["machines", "Machines", <Boxes size={18} key="i" />],
-            ["integrations", "Integrations", <Plug size={18} key="i" />],
-          ] as const
-        ).map(([page, label, icon]) => (
-          <button key={page} className={top === page ? "active" : ""} onClick={() => setView({ page })}>
-            {icon}
-            {label}
-          </button>
-        ))}
-        <span className="spacer" />
-        <span className="who">
-          <Users size={18} /> admin
-        </span>
-        <button onClick={onLogout} title="Log out">
-          <LogOut size={18} />
-          <span className="hide-sm">Log out</span>
-        </button>
-      </nav>
-
-      <div className="layout">
-        <aside className="sidebar card">
-          <h3>Server management</h3>
-          <button className={view.page === "overview" ? "active" : ""} onClick={() => setView({ page: "overview" })}>
-            <LayoutDashboard size={18} /> Overview
-          </button>
-          {instances.map((i) => (
-            <div key={i.id}>
-              <button className={current?.id === i.id ? "active" : ""} onClick={() => openServer(i.id)}>
-                <span className={`dot ${i.state}`} /> {i.name}
+    <PermsContext.Provider value={perms}>
+      <div className="shell">
+        <Banner />
+        <nav className="topnav">
+          {nav
+            .filter(([, , , shown]) => shown)
+            .map(([page, label, icon]) => (
+              <button key={page} className={top === page ? "active" : ""} onClick={() => setView({ page })}>
+                {icon}
+                {label}
               </button>
-              {current?.id === i.id && view.page === "server" && (
-                <div className="subnav">
-                  {tabs.map((t) => (
-                    <button key={t.id} className={view.tab === t.id ? "active" : ""} onClick={() => openServer(i.id, t.id)}>
-                      {t.icon} {t.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-          <button onClick={addServer}>
-            <Plus size={18} /> Add server
-          </button>
-          <div className="sidebar-art">
-            <img src="/art/sidebar.jpg" alt="A stronger world together" />
-          </div>
-        </aside>
-
-        <main>
-          {view.page === "overview" && (
-            <>
-              <Totals agents={agents} instances={instances} stats={stats} />
-              {serversPanel}
-            </>
-          )}
-          {view.page === "servers" && serversPanel}
-          {view.page === "machines" && <Machines agents={agents} instances={instances} />}
-          {view.page === "integrations" && <Integrations token={token} />}
-          {view.page === "server" &&
-            (current ? (
-              <ServerView
-                token={token}
-                instance={current}
-                stats={stats[current.id]}
-                agent={agents.find((a) => a.name === current.agent)}
-                template={templates.find((t) => t.id === current.templateId)}
-                gameName={gameName(current.templateId)}
-                tab={view.tab}
-                setTab={(tab) => openServer(current.id, tab)}
-                onBack={() => setView({ page: "overview" })}
-                onChanged={load}
-              />
-            ) : (
-              <p className="muted">That server no longer exists.</p>
             ))}
-        </main>
+          <span className="spacer" />
+          <button className={top === "account" ? "active who" : "who"} onClick={() => setView({ page: "account" })} title="Your account">
+            <Users size={18} /> {me?.name}
+            {me && <span className="role">{me.role}</span>}
+          </button>
+          <button onClick={onLogout} title="Log out">
+            <LogOut size={18} />
+            <span className="hide-sm">Log out</span>
+          </button>
+        </nav>
 
-        {view.page === "overview" && (
-          <aside className="rightcol">
-            <RecentActivity activity={activity} onOpen={openServer} />
-            <SystemStatus agents={agents} instances={instances} />
-            <div className="keep-art card">
-              <img src="/art/keep.jpg" alt="The keep never sleeps" />
+        <div className="layout">
+          <aside className="sidebar card">
+            <h3>Server management</h3>
+            <button className={view.page === "overview" ? "active" : ""} onClick={() => setView({ page: "overview" })}>
+              <LayoutDashboard size={18} /> Overview
+            </button>
+            {instances.map((i) => (
+              <div key={i.id}>
+                <button className={current?.id === i.id ? "active" : ""} onClick={() => openServer(i.id)}>
+                  <span className={`dot ${i.state}`} /> {i.name}
+                </button>
+                {current?.id === i.id && view.page === "server" && (
+                  <div className="subnav">
+                    {tabs
+                      .filter((t) => perms[t.need])
+                      .map((t) => (
+                        <button key={t.id} className={view.tab === t.id ? "active" : ""} onClick={() => openServer(i.id, t.id)}>
+                          {t.icon} {t.label}
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </div>
+            ))}
+            {perms.admin && (
+              <button onClick={addServer}>
+                <Plus size={18} /> Add server
+              </button>
+            )}
+            <div className="sidebar-art">
+              <img src="/art/sidebar.jpg" alt="A stronger world together" />
             </div>
           </aside>
-        )}
+
+          <main>
+            {view.page === "overview" && (
+              <>
+                <Totals agents={agents} instances={instances} stats={stats} />
+                {serversPanel}
+              </>
+            )}
+            {view.page === "servers" && serversPanel}
+            {view.page === "machines" && <Machines agents={agents} instances={instances} />}
+            {view.page === "activity" && <ActivityLog token={token} instances={instances} onOpen={openServer} />}
+            {view.page === "integrations" && perms.admin && <Integrations token={token} />}
+            {view.page === "users" && perms.admin && me && <UserList token={token} me={me} />}
+            {view.page === "account" && me && <Account token={token} me={me} />}
+            {view.page === "server" &&
+              (current ? (
+                <ServerView
+                  token={token}
+                  instance={current}
+                  stats={stats[current.id]}
+                  agent={agents.find((a) => a.name === current.agent)}
+                  template={templates.find((t) => t.id === current.templateId)}
+                  gameName={gameName(current.templateId)}
+                  tab={view.tab}
+                  setTab={(tab) => openServer(current.id, tab)}
+                  onBack={() => setView({ page: "overview" })}
+                  onChanged={load}
+                />
+              ) : (
+                <p className="muted">That server no longer exists.</p>
+              ))}
+          </main>
+
+          {view.page === "overview" && (
+            <aside className="rightcol">
+              <RecentActivity activity={activity} onOpen={openServer} />
+              <SystemStatus agents={agents} instances={instances} />
+              <div className="keep-art card">
+                <img src="/art/keep.jpg" alt="The keep never sleeps" />
+              </div>
+            </aside>
+          )}
+        </div>
       </div>
-    </div>
+    </PermsContext.Provider>
   );
 }
 
@@ -338,7 +382,13 @@ function Totals({ agents, instances, stats }: { agents: Agent[]; instances: Inst
         label="Players online"
         meter={<Meter value={players} max={maxPlayers} color="blue" />}
       />
-      <StatCard icon={<Cpu size={34} />} value={cpu.toFixed(0)} unit="%" label="CPU usage" meter={<Meter value={cpu} max={100} color="text" />} />
+      <StatCard
+        icon={<Cpu size={34} />}
+        value={cpu.toFixed(0)}
+        unit="%"
+        label="CPU usage"
+        meter={<Meter value={cpu} max={100} color="text" />}
+      />
       <StatCard
         icon={<MemoryStick size={34} />}
         value={ramValue}
@@ -393,15 +443,17 @@ function ServerList({
           <Search size={16} />
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search servers…" />
         </label>
-        <button className="primary" onClick={() => setCreating(!creating)}>
-          {creating ? (
-            "Cancel"
-          ) : (
-            <>
-              <Plus size={16} /> Add server
-            </>
-          )}
-        </button>
+        {usePerms().admin && (
+          <button className="primary" onClick={() => setCreating(!creating)}>
+            {creating ? (
+              "Cancel"
+            ) : (
+              <>
+                <Plus size={16} /> Add server
+              </>
+            )}
+          </button>
+        )}
       </div>
       {creating && (
         <CreateServer
@@ -453,14 +505,15 @@ function useActions(token: string, instance: Instance, onChanged: () => void) {
     [token, instance.id, onChanged],
   );
   const s = instance.state;
+  const { control } = usePerms();
   return {
     act,
     busy,
     error,
-    canInstall: s === "not_installed" || s === "stopped" || s === "error",
-    canStart: s === "stopped" || s === "error",
-    canStop: s === "running" || s === "starting",
-    canRestart: s === "running",
+    canInstall: control && (s === "not_installed" || s === "stopped" || s === "error"),
+    canStart: control && (s === "stopped" || s === "error"),
+    canStop: control && (s === "running" || s === "starting"),
+    canRestart: control && s === "running",
   };
 }
 
@@ -469,7 +522,7 @@ function StateLabel({ instance, stats }: { instance: Instance; stats?: Stats }) 
   return (
     <span className={`statelabel ${s}`}>
       <span className={`dot ${s}`} />
-      {s === "running" && stats && !stats.ready ? "Starting…" : stateLabels[s] ?? s}
+      {s === "running" && stats && !stats.ready ? "Starting…" : (stateLabels[s] ?? s)}
       {!instance.agentOnline && " (machine offline)"}
     </span>
   );
@@ -550,15 +603,19 @@ function ServerRow({
       </div>
       <ServerMeters instance={instance} stats={stats} agent={agent} />
       <div className="row-actions">
-        <button className="icon" disabled={busy || !canStart} onClick={() => act("/start")} title="Start">
-          <Play size={18} />
-        </button>
-        <button className="icon" disabled={busy || !canStop} onClick={() => act("/stop")} title="Stop">
-          <Square size={16} fill="currentColor" />
-        </button>
-        <button className="icon" disabled={busy || !canRestart} onClick={() => act("/restart")} title="Restart">
-          <RotateCw size={18} />
-        </button>
+        {usePerms().control && (
+          <>
+            <button className="icon" disabled={busy || !canStart} onClick={() => act("/start")} title="Start">
+              <Play size={18} />
+            </button>
+            <button className="icon" disabled={busy || !canStop} onClick={() => act("/stop")} title="Stop">
+              <Square size={16} fill="currentColor" />
+            </button>
+            <button className="icon" disabled={busy || !canRestart} onClick={() => act("/restart")} title="Restart">
+              <RotateCw size={18} />
+            </button>
+          </>
+        )}
         <button className="icon" onClick={() => onOpen(instance.id)} title="Open server">
           <MoreVertical size={18} />
         </button>
@@ -566,20 +623,6 @@ function ServerRow({
     </div>
   );
 }
-
-function timeOf(iso: string) {
-  const d = new Date(iso);
-  const sameDay = d.toDateString() === new Date().toDateString();
-  return sameDay ? d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : d.toLocaleDateString([], { month: "short", day: "numeric" });
-}
-
-const activityKinds: Record<string, { label: string; icon: ReactNode; color: string }> = {
-  "player.join": { label: "Player joined", icon: <UserPlus size={22} />, color: "green" },
-  "player.leave": { label: "Player left", icon: <UserMinus size={22} />, color: "red" },
-  "server.ready": { label: "Server ready", icon: <Play size={22} />, color: "green" },
-  "server.stopped": { label: "Server stopped", icon: <Square size={20} />, color: "muted" },
-  "server.crashed": { label: "Server crashed", icon: <AlertTriangle size={22} />, color: "red" },
-};
 
 function RecentActivity({ activity, onOpen }: { activity: ActivityEvent[]; onOpen: (id: string) => void }) {
   const [all, setAll] = useState(false);
@@ -595,19 +638,9 @@ function RecentActivity({ activity, onOpen }: { activity: ActivityEvent[]; onOpe
         )}
       </div>
       {activity.length === 0 && <p className="muted">Nothing yet. Joins, leaves, starts and stops show up here.</p>}
-      {shown.map((e, n) => {
-        const kind = activityKinds[e.type] ?? { label: e.type, icon: <Activity size={22} />, color: "muted" };
-        return (
-          <button key={n} className="activity-item" onClick={() => onOpen(e.instance.id)}>
-            <span className={`activity-icon ${kind.color}`}>{kind.icon}</span>
-            <span className="activity-text">
-              <span>{e.player ? `${e.player} ${kind.label.split(" ")[1]}` : kind.label}</span>
-              <span className="muted">{e.instance.name}</span>
-            </span>
-            <span className="muted activity-time">{timeOf(e.time)}</span>
-          </button>
-        );
-      })}
+      {shown.map((e, n) => (
+        <ActivityItem key={n} event={e} onOpen={onOpen} />
+      ))}
     </section>
   );
 }
@@ -662,7 +695,12 @@ function Machines({ agents, instances }: { agents: Agent[]; instances: Instance[
                 {a.hostname} · {a.os}/{a.arch} · agent {a.version}
               </p>
               <p>
-                <Cpu size={16} /> {a.numCpu} CPUs {a.memoryTotal ? <><MemoryStick size={16} /> {formatSize(a.memoryTotal)} RAM</> : null}
+                <Cpu size={16} /> {a.numCpu} CPUs{" "}
+                {a.memoryTotal ? (
+                  <>
+                    <MemoryStick size={16} /> {formatSize(a.memoryTotal)} RAM
+                  </>
+                ) : null}
               </p>
               {a.diskTotal ? (
                 <div className="meter-row">
@@ -767,7 +805,9 @@ function CreateServer({
           />
         </label>
       ))}
-      <button type="submit" className="primary">Create</button>
+      <button type="submit" className="primary">
+        Create
+      </button>
       {error && <p className="error">{error}</p>}
     </form>
   );
@@ -846,7 +886,9 @@ function ServerSettings({
   return (
     <form className="create" onSubmit={save}>
       <SettingsFields fields={template.config} values={values} onChange={setValues} />
-      <button type="submit" className="primary">Save settings</button>
+      <button type="submit" className="primary">
+        Save settings
+      </button>
       {message && <p className="muted">{message}</p>}
       {error && <p className="error">{error}</p>}
     </form>
@@ -877,6 +919,7 @@ function ServerView({
   onChanged: () => void;
 }) {
   const { act, busy, error, canInstall, canStart, canStop, canRestart } = useActions(token, instance, onChanged);
+  const perms = usePerms();
   const s = instance.state;
   const installed = s !== "not_installed" && s !== "installing";
   const live = s === "running" && stats;
@@ -907,51 +950,61 @@ function ServerView({
           {error && <div className="error">{error}</div>}
         </div>
         <ServerMeters instance={instance} stats={stats} agent={agent} />
-        <div className="hero-actions">
-          <button disabled={busy || !canInstall} onClick={() => act("/install")}>
-            <Download size={16} /> {s === "not_installed" ? "Install" : "Update"}
-          </button>
-          <button className="primary" disabled={busy || !canStart} onClick={() => act("/start")}>
-            <Play size={16} /> Start
-          </button>
-          <button disabled={busy || !canStop} onClick={() => act("/stop")}>
-            <Square size={14} fill="currentColor" /> Stop
-          </button>
-          <button disabled={busy || !canRestart} onClick={() => act("/restart")}>
-            <RotateCw size={16} /> Restart
-          </button>
-          <button disabled={busy || canStop || s === "installing"} className="danger" onClick={remove}>
-            <Trash2 size={16} /> Delete
-          </button>
-        </div>
-      </section>
-      <section className="card">
-        <nav className="tabs">
-          {tabs.map((t) => (
-            <button key={t.id} className={tab === t.id ? "active" : ""} onClick={() => setTab(t.id)}>
-              {t.icon} {t.label}
+        {perms.control && (
+          <div className="hero-actions">
+            <button disabled={busy || !canInstall} onClick={() => act("/install")}>
+              <Download size={16} /> {s === "not_installed" ? "Install" : "Update"}
             </button>
-          ))}
-        </nav>
-        {tab === "console" && (
-          <Console token={token} id={instance.id} running={s === "running"} onSend={(line) => act("/command", "POST", { line })} />
+            <button className="primary" disabled={busy || !canStart} onClick={() => act("/start")}>
+              <Play size={16} /> Start
+            </button>
+            <button disabled={busy || !canStop} onClick={() => act("/stop")}>
+              <Square size={14} fill="currentColor" /> Stop
+            </button>
+            <button disabled={busy || !canRestart} onClick={() => act("/restart")}>
+              <RotateCw size={16} /> Restart
+            </button>
+            {perms.admin && (
+              <button disabled={busy || canStop || s === "installing"} className="danger" onClick={remove}>
+                <Trash2 size={16} /> Delete
+              </button>
+            )}
+          </div>
         )}
-        {tab === "settings" && template && (
-          <ServerSettings key={instance.id} token={token} instance={instance} template={template} onSaved={onChanged} />
-        )}
-        {tab === "files" &&
-          (installed && instance.agentOnline ? (
-            <Files token={token} instance={instance} template={template} />
-          ) : (
-            <p className="muted">Install the server and keep its machine online to manage files.</p>
-          ))}
-        {tab === "backups" &&
-          (installed && instance.agentOnline ? (
-            <Backups token={token} instance={instance} />
-          ) : (
-            <p className="muted">Install the server and keep its machine online to manage backups.</p>
-          ))}
       </section>
+      {perms.control && (
+        <section className="card">
+          <nav className="tabs">
+            {tabs
+              .filter((t) => perms[t.need])
+              .map((t) => (
+                <button key={t.id} className={tab === t.id ? "active" : ""} onClick={() => setTab(t.id)}>
+                  {t.icon} {t.label}
+                </button>
+              ))}
+          </nav>
+          {tab === "console" && perms.control && (
+            <Console token={token} id={instance.id} running={s === "running"} onSend={(line) => act("/command", "POST", { line })} />
+          )}
+          {tab === "settings" && template && perms.manage && (
+            <ServerSettings key={instance.id} token={token} instance={instance} template={template} onSaved={onChanged} />
+          )}
+          {tab === "files" &&
+            perms.manage &&
+            (installed && instance.agentOnline ? (
+              <Files token={token} instance={instance} template={template} />
+            ) : (
+              <p className="muted">Install the server and keep its machine online to manage files.</p>
+            ))}
+          {tab === "backups" &&
+            perms.manage &&
+            (installed && instance.agentOnline ? (
+              <Backups token={token} instance={instance} />
+            ) : (
+              <p className="muted">Install the server and keep its machine online to manage backups.</p>
+            ))}
+        </section>
+      )}
     </>
   );
 }
