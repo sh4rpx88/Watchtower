@@ -12,6 +12,7 @@ Base path: `/api/v1`. All endpoints except `health` and `login` need `Authorizat
 | GET | `/instances` | All servers, with state and whether their machine is online |
 | POST | `/instances` | Create: `{"name", "templateId", "agent", "settings": {...}, "ports": {"game": 25566}}` |
 | GET | `/instances/{id}` | One server |
+| PUT | `/instances/{id}/settings` | Change settings, e.g. `{"motd": "Hi"}`; applies on next start |
 | POST | `/instances/{id}/install` | Install or update the game files |
 | POST | `/instances/{id}/start` | Start |
 | POST | `/instances/{id}/stop` | Send the game's stop command; killed after 60 s |

@@ -17,7 +17,10 @@ config:
   - { key: memory, label: Max memory, type: string, default: 2G }
   - { key: motd, label: Message of the day, type: string, default: "A Minecraft Server", file: server.properties }
   - { key: max-players, label: Max players, type: int, default: "20", file: server.properties }
-  - { key: difficulty, label: Difficulty, type: select, default: normal, file: server.properties }
+  - { key: difficulty, label: Difficulty, type: select, options: [peaceful, easy, normal, hard], default: normal, file: server.properties }
+  - { key: gamemode, label: Game mode, type: select, options: [survival, creative, adventure, spectator], default: survival, file: server.properties }
+  - { key: pvp, label: PvP, type: bool, default: "true", file: server.properties }
+  - { key: white-list, label: Whitelist on, type: bool, default: "false", file: server.properties }
   - { key: online-mode, label: Online mode, type: bool, default: "true", file: server.properties }
 stats:
   method: rcon

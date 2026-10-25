@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -20,12 +22,13 @@ type Port struct {
 }
 
 type ConfigField struct {
-	Key      string `yaml:"key" json:"key"`
-	Label    string `yaml:"label" json:"label"`
-	Type     string `yaml:"type" json:"type"` // string, int, bool, select
-	Default  string `yaml:"default" json:"default"`
-	File     string `yaml:"file,omitempty" json:"file,omitempty"`         // config file the value is written to (milestone 3)
-	Required bool   `yaml:"required,omitempty" json:"required,omitempty"` // bools must be "true", others non-empty
+	Key      string   `yaml:"key" json:"key"`
+	Label    string   `yaml:"label" json:"label"`
+	Type     string   `yaml:"type" json:"type"` // string, int, bool, select
+	Default  string   `yaml:"default" json:"default"`
+	Options  []string `yaml:"options,omitempty" json:"options,omitempty"`   // choices for select
+	File     string   `yaml:"file,omitempty" json:"file,omitempty"`         // key=value config file the value is written to before each start
+	Required bool     `yaml:"required,omitempty" json:"required,omitempty"` // bools must be "true", others non-empty
 }
 
 type Template struct {
@@ -81,14 +84,15 @@ func LoadDir(dir string) ([]Template, error) {
 	return out, nil
 }
 
-// Settings returns the template's config defaults overlaid with the given values.
+// Settings returns the template's config defaults overlaid with the given
+// values. Keys the template doesn't define are dropped.
 func (t Template) Settings(values map[string]string) map[string]string {
 	out := map[string]string{}
 	for _, f := range t.Config {
 		out[f.Key] = f.Default
-	}
-	for k, v := range values {
-		out[k] = v
+		if v, ok := values[f.Key]; ok {
+			out[f.Key] = v
+		}
 	}
 	return out
 }
@@ -96,6 +100,21 @@ func (t Template) Settings(values map[string]string) map[string]string {
 // Render fills {{.key}} placeholders in s from vars. A missing key is an error,
 // so a typo in a template fails loudly instead of starting a broken server.
 func Render(s string, vars map[string]string) (string, error) {
+	return render(s, vars)
+}
+
+// RenderShell is Render for shell command lines: each value is single-quoted,
+// so spaces and symbols in settings can't split arguments or run commands.
+// -Xmx{{.memory}} becomes -Xmx'2G', which the shell reads as -Xmx2G.
+func RenderShell(s string, vars map[string]string) (string, error) {
+	quoted := make(map[string]string, len(vars))
+	for k, v := range vars {
+		quoted[k] = "'" + strings.ReplaceAll(v, "'", `'\''`) + "'"
+	}
+	return render(s, quoted)
+}
+
+func render(s string, vars map[string]string) (string, error) {
 	tpl, err := template.New("").Option("missingkey=error").Parse(s)
 	if err != nil {
 		return "", err
@@ -107,14 +126,28 @@ func Render(s string, vars map[string]string) (string, error) {
 	return b.String(), nil
 }
 
-// Validate checks settings against the template's required fields.
+// Validate checks settings against each field's type and the required fields.
 func (t Template) Validate(settings map[string]string) error {
 	for _, f := range t.Config {
-		if !f.Required {
-			continue
-		}
 		v := settings[f.Key]
-		if (f.Type == "bool" && v != "true") || v == "" {
+		if strings.ContainsAny(v, "\r\n") {
+			return fmt.Errorf("%s can't contain line breaks", f.Label)
+		}
+		switch f.Type {
+		case "bool":
+			if v != "true" && v != "false" {
+				return fmt.Errorf("%s must be true or false", f.Label)
+			}
+		case "int":
+			if _, err := strconv.Atoi(v); err != nil && v != "" {
+				return fmt.Errorf("%s must be a whole number", f.Label)
+			}
+		case "select":
+			if v != "" && len(f.Options) > 0 && !slices.Contains(f.Options, v) {
+				return fmt.Errorf("%s must be one of %s", f.Label, strings.Join(f.Options, ", "))
+			}
+		}
+		if f.Required && (v == "" || (f.Type == "bool" && v != "true")) {
 			return fmt.Errorf("%s is required", f.Label)
 		}
 	}

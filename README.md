@@ -3,7 +3,7 @@
 A self-hosted, open source web panel for running game servers, in the spirit of CubeCoders AMP.
 The first games are **Minecraft (Java)** and **Project Zomboid**, on Debian Linux with Docker.
 
-> Status: early. You can create Minecraft and Project Zomboid servers, install them, start and stop them, and use a live console. Config editing, backups, and the stats API come next.
+> Status: early. You can create Minecraft and Project Zomboid servers, install them, start and stop them, edit their settings, and use a live console. Backups, a file manager, and the stats API come next.
 
 ## How it fits together
 

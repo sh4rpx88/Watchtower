@@ -56,6 +56,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/instances", s.requireAuth(s.handleCreateInstance))
 	mux.HandleFunc("GET /api/v1/instances/{id}", s.requireAuth(s.handleGetInstance))
 	mux.HandleFunc("DELETE /api/v1/instances/{id}", s.requireAuth(s.handleDeleteInstance))
+	mux.HandleFunc("PUT /api/v1/instances/{id}/settings", s.requireAuth(s.handleUpdateSettings))
 	mux.HandleFunc("POST /api/v1/instances/{id}/{action}", s.requireAuth(s.handleAction))
 	mux.HandleFunc("GET /api/v1/instances/{id}/console", s.requireAuth(s.handleConsole))
 	mux.HandleFunc("GET /agent/connect", s.handleAgentConnect)

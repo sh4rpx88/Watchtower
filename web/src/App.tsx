@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { Agent, ApiError, Instance, Template, api, consoleURL, login } from "./api";
+import { Agent, ApiError, ConfigField, Instance, Template, api, consoleURL, login } from "./api";
 
 export default function App() {
   const [token, setToken] = useState(() => sessionStorage.getItem("token") ?? "");
@@ -93,6 +93,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
         <ServerView
           token={token}
           instance={current}
+          template={templates.find((t) => t.id === current.templateId)}
           gameName={gameName(current.templateId)}
           onBack={() => setSelected(null)}
           onChanged={load}
@@ -226,28 +227,7 @@ function CreateServer({
           ))}
         </select>
       </label>
-      {tpl?.config.map((f) =>
-        f.type === "bool" ? (
-          <label key={f.key} className="check">
-            <input
-              type="checkbox"
-              checked={(settings[f.key] ?? f.default) === "true"}
-              onChange={(e) => setSettings({ ...settings, [f.key]: String(e.target.checked) })}
-            />
-            {f.label}
-          </label>
-        ) : (
-          <label key={f.key}>
-            {f.label}
-            {f.required && " *"}
-            <input
-              type={f.type === "int" ? "number" : "text"}
-              value={settings[f.key] ?? f.default}
-              onChange={(e) => setSettings({ ...settings, [f.key]: e.target.value })}
-            />
-          </label>
-        ),
-      )}
+      {tpl && <SettingsFields fields={tpl.config} values={settings} onChange={setSettings} />}
       {tpl?.ports.map((p) => (
         <label key={p.name}>
           Port: {p.name} ({p.protocol})
@@ -265,15 +245,100 @@ function CreateServer({
   );
 }
 
+function SettingsFields({
+  fields,
+  values,
+  onChange,
+}: {
+  fields: ConfigField[];
+  values: Record<string, string>;
+  onChange: (values: Record<string, string>) => void;
+}) {
+  const set = (key: string, value: string) => onChange({ ...values, [key]: value });
+  return (
+    <>
+      {fields.map((f) => {
+        const value = values[f.key] ?? f.default;
+        if (f.type === "bool") {
+          return (
+            <label key={f.key} className="check">
+              <input type="checkbox" checked={value === "true"} onChange={(e) => set(f.key, String(e.target.checked))} />
+              {f.label}
+            </label>
+          );
+        }
+        return (
+          <label key={f.key}>
+            {f.label}
+            {f.required && " *"}
+            {f.type === "select" && f.options ? (
+              <select value={value} onChange={(e) => set(f.key, e.target.value)}>
+                {f.options.map((o) => (
+                  <option key={o}>{o}</option>
+                ))}
+              </select>
+            ) : (
+              <input type={f.type === "int" ? "number" : "text"} value={value} onChange={(e) => set(f.key, e.target.value)} />
+            )}
+          </label>
+        );
+      })}
+    </>
+  );
+}
+
+function ServerSettings({
+  token,
+  instance,
+  template,
+  onSaved,
+}: {
+  token: string;
+  instance: Instance;
+  template: Template;
+  onSaved: () => void;
+}) {
+  const [values, setValues] = useState(instance.settings);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    setMessage("");
+    try {
+      await api(token, "PUT", `/instances/${instance.id}/settings`, values);
+      setMessage(instance.state === "running" ? "Saved. Restart the server to apply." : "Saved. Applies on next start.");
+      onSaved();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  return (
+    <details className="settings">
+      <summary>Settings</summary>
+      <form className="create" onSubmit={save}>
+        <SettingsFields fields={template.config} values={values} onChange={setValues} />
+        <button type="submit">Save settings</button>
+        {message && <p className="muted">{message}</p>}
+        {error && <p className="error">{error}</p>}
+      </form>
+    </details>
+  );
+}
+
 function ServerView({
   token,
   instance,
+  template,
   gameName,
   onBack,
   onChanged,
 }: {
   token: string;
   instance: Instance;
+  template?: Template;
   gameName: string;
   onBack: () => void;
   onChanged: () => void;
@@ -338,6 +403,7 @@ function ServerView({
         </button>
       </div>
       {error && <p className="error">{error}</p>}
+      {template && <ServerSettings key={instance.id} token={token} instance={instance} template={template} onSaved={onChanged} />}
       <Console token={token} id={instance.id} running={s === "running"} onSend={(line) => act("/command", "POST", { line })} />
     </section>
   );

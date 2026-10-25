@@ -189,6 +189,16 @@ func TestInstanceLifecycle(t *testing.T) {
 		"ports": map[string]int{"game": 25566},
 	}, http.StatusCreated, nil)
 
+	// Settings: a partial update keeps the rest, and bad values are refused.
+	var updated instanceView
+	c.do("PUT", "/api/v1/instances/"+in.ID+"/settings", map[string]string{"motd": "Hello", "nonsense": "x"}, http.StatusOK, &updated)
+	if updated.Settings["motd"] != "Hello" || updated.Settings["eula"] != "true" || updated.Settings["nonsense"] != "" {
+		t.Fatalf("unexpected settings: %+v", updated.Settings)
+	}
+	c.do("PUT", "/api/v1/instances/"+in.ID+"/settings", map[string]string{"difficulty": "nightmare"}, http.StatusBadRequest, nil)
+	c.do("PUT", "/api/v1/instances/"+in.ID+"/settings", map[string]string{"max-players": "lots"}, http.StatusBadRequest, nil)
+	c.do("PUT", "/api/v1/instances/"+in.ID+"/settings", map[string]string{"eula": "false"}, http.StatusBadRequest, nil)
+
 	// Starting before installing fails.
 	c.do("POST", "/api/v1/instances/"+in.ID+"/start", nil, http.StatusConflict, nil)
 
