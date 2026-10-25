@@ -24,5 +24,7 @@ config:
   - { key: white-list, label: Whitelist on, type: bool, default: "false", file: server.properties }
   - { key: online-mode, label: Online mode, type: bool, default: "true", file: server.properties }
 stats:
-  method: rcon
-  port: rcon
+  ready: 'INFO\]: Done \('
+  join: 'INFO\]: (?P<player>[A-Za-z0-9_]{1,16}) joined the game'
+  leave: 'INFO\]: (?P<player>[A-Za-z0-9_]{1,16}) left the game'
+  maxPlayers: max-players

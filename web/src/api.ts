@@ -97,3 +97,28 @@ export function formatSize(bytes: number): string {
   if (bytes < 1 << 30) return `${(bytes / (1 << 20)).toFixed(1)} MB`;
   return `${(bytes / (1 << 30)).toFixed(2)} GB`;
 }
+
+export type Stats = {
+  id: string;
+  name: string;
+  state: string;
+  ready: boolean;
+  players: string[];
+  playerCount: number;
+  maxPlayers?: number;
+  uptimeSeconds?: number;
+  cpuPercent: number;
+  memoryBytes: number;
+};
+
+export type APIToken = { id: string; name: string; scope: "read" | "control"; prefix: string; createdAt: string; lastUsed?: string };
+export type Webhook = { id: string; name: string; url: string; format: "discord" | "json"; events: string[] };
+
+export function formatDuration(seconds: number): string {
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (d) return `${d}d ${h}h`;
+  if (h) return `${h}h ${m}m`;
+  return `${m}m`;
+}

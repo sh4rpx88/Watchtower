@@ -118,6 +118,7 @@ func session(ctx context.Context, cfg Config, mgr *Manager, started time.Time) (
 			UptimeSeconds: int64(time.Since(started).Seconds()), NumCPU: runtime.NumCPU(),
 		})
 		send(hb)
+		go mgr.reportResources()
 		select {
 		case <-ctx.Done():
 			conn.Close(websocket.StatusNormalClosure, "agent shutting down")

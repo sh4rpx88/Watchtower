@@ -186,6 +186,14 @@ func (s *Server) handleAgentMessage(a *agentConn, env protocol.Envelope) {
 		if json.Unmarshal(env.Payload, &line) == nil {
 			if in, ok := s.store.get(line.ID); ok && in.Agent == a.info.Name {
 				s.consoles.append(line.ID, line.Line)
+				s.observeLine(in, line.Line)
+			}
+		}
+	case protocol.TypeResources:
+		var res protocol.Resources
+		if json.Unmarshal(env.Payload, &res) == nil {
+			if in, ok := s.store.get(res.ID); ok && in.Agent == a.info.Name {
+				s.statsTracker.resources(res.ID, res.CPUPercent, res.MemoryBytes)
 			}
 		}
 	default:
@@ -202,6 +210,48 @@ func (s *Server) setInstanceState(agentName string, st protocol.Status) {
 	if _, err := s.store.update(st.ID, func(in *Instance) { in.State, in.Error = st.State, st.Error }); err != nil {
 		slog.Error("saving instance state", "err", err)
 	}
+	if st.State == in.State {
+		return // a replay after reconnecting
+	}
+	prev := in.State
+	dropped := s.statsTracker.stateChanged(in.ID, st.State)
+	in.State, in.Error = st.State, st.Error
+	for _, name := range dropped {
+		s.emit(s.event(in, EventPlayerLeave, name))
+	}
+	wasUp := prev == protocol.StateStarting || prev == protocol.StateRunning || prev == protocol.StateStopping
+	switch {
+	case st.State == protocol.StateError && wasUp:
+		e := s.event(in, EventServerCrashed, "")
+		e.Error = st.Error
+		s.emit(e)
+	case st.State == protocol.StateStopped && wasUp:
+		s.emit(s.event(in, EventServerStopped, ""))
+	}
+}
+
+// observeLine follows players and readiness from a console line.
+func (s *Server) observeLine(in Instance, line string) {
+	tpl, ok := s.template(in.TemplateID)
+	if !ok {
+		return
+	}
+	joined, left, ready := s.statsTracker.observe(in.ID, line, tpl.Stats)
+	if ready {
+		s.emit(s.event(in, EventServerReady, ""))
+	}
+	if joined != "" {
+		s.emit(s.event(in, EventPlayerJoin, joined))
+	}
+	if left != "" {
+		s.emit(s.event(in, EventPlayerLeave, left))
+	}
+}
+
+func (s *Server) event(in Instance, eventType, player string) Event {
+	st := s.stats(in)
+	return Event{Type: eventType, Instance: EventInstance{ID: in.ID, Name: in.Name, Game: st.Game},
+		Player: player, PlayerCount: st.PlayerCount, MaxPlayers: st.MaxPlayers}
 }
 
 func (s *Server) resetLiveStates(agentName string) {

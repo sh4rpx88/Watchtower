@@ -1,7 +1,8 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { Agent, ApiError, ConfigField, Instance, Template, api, consoleURL, login } from "./api";
+import { Agent, ApiError, ConfigField, Instance, Stats, Template, api, consoleURL, formatDuration, formatSize, login } from "./api";
 import Backups from "./Backups";
 import Files from "./Files";
+import Integrations from "./Integrations";
 
 export default function App() {
   const [token, setToken] = useState(() => sessionStorage.getItem("token") ?? "");
@@ -57,18 +58,21 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const [agents, setAgents] = useState<Agent[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [instances, setInstances] = useState<Instance[]>([]);
+  const [stats, setStats] = useState<Record<string, Stats>>({});
   const [selected, setSelected] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [a, t, i] = await Promise.all([
+      const [a, t, i, st] = await Promise.all([
         api<Agent[]>(token, "GET", "/agents"),
         api<Template[]>(token, "GET", "/templates"),
         api<Instance[]>(token, "GET", "/instances"),
+        api<Stats[]>(token, "GET", "/stats"),
       ]);
       setAgents(a);
       setTemplates(t);
+      setStats(Object.fromEntries(st.map((x) => [x.id, x])));
       setInstances(i.sort((x, y) => x.name.localeCompare(y.name)));
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) onLogout();
@@ -95,6 +99,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
         <ServerView
           token={token}
           instance={current}
+          stats={stats[current.id]}
           template={templates.find((t) => t.id === current.templateId)}
           gameName={gameName(current.templateId)}
           onBack={() => setSelected(null)}
@@ -129,6 +134,13 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                       <strong>{i.name}</strong>
                     </button>{" "}
                     {gameName(i.templateId)} on {i.agent} · <span className={`state ${i.state}`}>{stateLabels[i.state] ?? i.state}</span>
+                    {i.state === "running" && stats[i.id] && (
+                      <span className="muted">
+                        {" "}
+                        · {stats[i.id].playerCount}
+                        {stats[i.id].maxPlayers ? `/${stats[i.id].maxPlayers}` : ""} players
+                      </span>
+                    )}
                     {!i.agentOnline && <span className="muted"> (machine offline)</span>}
                   </li>
                 ))}
@@ -149,6 +161,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               </ul>
             )}
           </section>
+          <Integrations token={token} />
         </>
       )}
     </main>
@@ -330,6 +343,7 @@ function ServerSettings({
 function ServerView({
   token,
   instance,
+  stats,
   template,
   gameName,
   onBack,
@@ -337,6 +351,7 @@ function ServerView({
 }: {
   token: string;
   instance: Instance;
+  stats?: Stats;
   template?: Template;
   gameName: string;
   onBack: () => void;
@@ -388,6 +403,14 @@ function ServerView({
           .join(", ")}
         {!instance.agentOnline && " · machine offline"}
       </p>
+      {stats && s === "running" && (
+        <p className="stats">
+          {stats.ready ? "Ready" : "Starting up"} · up {formatDuration(stats.uptimeSeconds ?? 0)} · CPU {stats.cpuPercent.toFixed(0)}% · RAM{" "}
+          {formatSize(stats.memoryBytes)} · {stats.playerCount}
+          {stats.maxPlayers ? `/${stats.maxPlayers}` : ""} players
+          {stats.players.length > 0 && `: ${stats.players.join(", ")}`}
+        </p>
+      )}
       {instance.error && <p className="error">{instance.error}</p>}
       <div className="actions">
         <button disabled={busy || !canInstall} onClick={() => act("/install")}>

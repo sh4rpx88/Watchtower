@@ -28,9 +28,13 @@ type Config struct {
 }
 
 type Server struct {
-	cfg      Config
-	store    *store
-	consoles *consoles
+	cfg          Config
+	store        *store
+	consoles     *consoles
+	statsTracker *statsTracker
+	tokens       *jsonList[APIToken]
+	webhooks     *jsonList[Webhook]
+	events       chan Event
 
 	mu       sync.Mutex
 	agents   map[string]*agentConn
@@ -42,32 +46,58 @@ func New(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Server{cfg: cfg, store: st, consoles: newConsoles(),
-		agents: map[string]*agentConn{}, sessions: map[string]time.Time{}}, nil
+	tokens, err := openJSONList[APIToken](cfg.DataDir, "tokens.json")
+	if err != nil {
+		return nil, err
+	}
+	webhooks, err := openJSONList[Webhook](cfg.DataDir, "webhooks.json")
+	if err != nil {
+		return nil, err
+	}
+	s := &Server{cfg: cfg, store: st, consoles: newConsoles(), statsTracker: newStatsTracker(),
+		tokens: tokens, webhooks: webhooks, events: make(chan Event, 256),
+		agents: map[string]*agentConn{}, sessions: map[string]time.Time{}}
+	go s.deliverEvents(context.Background())
+	return s, nil
 }
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/health", s.handleHealth)
 	mux.HandleFunc("POST /api/v1/login", s.handleLogin)
-	mux.HandleFunc("GET /api/v1/agents", s.requireAuth(s.handleAgents))
-	mux.HandleFunc("GET /api/v1/templates", s.requireAuth(s.handleTemplates))
-	mux.HandleFunc("GET /api/v1/instances", s.requireAuth(s.handleListInstances))
-	mux.HandleFunc("POST /api/v1/instances", s.requireAuth(s.handleCreateInstance))
-	mux.HandleFunc("GET /api/v1/instances/{id}", s.requireAuth(s.handleGetInstance))
-	mux.HandleFunc("DELETE /api/v1/instances/{id}", s.requireAuth(s.handleDeleteInstance))
-	mux.HandleFunc("PUT /api/v1/instances/{id}/settings", s.requireAuth(s.handleUpdateSettings))
-	mux.HandleFunc("POST /api/v1/instances/{id}/{action}", s.requireAuth(s.handleAction))
-	mux.HandleFunc("GET /api/v1/instances/{id}/console", s.requireAuth(s.handleConsole))
-	mux.HandleFunc("GET /api/v1/instances/{id}/files", s.requireAuth(s.handleListFiles))
-	mux.HandleFunc("DELETE /api/v1/instances/{id}/files", s.requireAuth(s.handleDeleteFile))
-	mux.HandleFunc("POST /api/v1/instances/{id}/files/mkdir", s.requireAuth(s.handleMkdir))
-	mux.HandleFunc("GET /api/v1/instances/{id}/files/content", s.requireAuth(s.handleReadFile))
-	mux.HandleFunc("PUT /api/v1/instances/{id}/files/content", s.requireAuth(s.handleWriteFile))
-	mux.HandleFunc("GET /api/v1/instances/{id}/backups", s.requireAuth(s.handleListBackups))
-	mux.HandleFunc("POST /api/v1/instances/{id}/backups", s.requireAuth(s.handleCreateBackup))
-	mux.HandleFunc("POST /api/v1/instances/{id}/backups/{name}/restore", s.requireAuth(s.handleRestoreBackup))
-	mux.HandleFunc("DELETE /api/v1/instances/{id}/backups/{name}", s.requireAuth(s.handleDeleteBackup))
+	read, control, admin := func(h http.HandlerFunc) http.HandlerFunc { return s.auth(levelRead, h) },
+		func(h http.HandlerFunc) http.HandlerFunc { return s.auth(levelControl, h) },
+		func(h http.HandlerFunc) http.HandlerFunc { return s.auth(levelAdmin, h) }
+
+	mux.HandleFunc("GET /api/v1/agents", read(s.handleAgents))
+	mux.HandleFunc("GET /api/v1/templates", read(s.handleTemplates))
+	mux.HandleFunc("GET /api/v1/stats", read(s.handleAllStats))
+	mux.HandleFunc("GET /api/v1/instances", read(s.handleListInstances))
+	mux.HandleFunc("GET /api/v1/instances/{id}", read(s.handleGetInstance))
+	mux.HandleFunc("GET /api/v1/instances/{id}/stats", read(s.handleStats))
+
+	mux.HandleFunc("POST /api/v1/instances/{id}/{action}", control(s.handleAction))
+	mux.HandleFunc("GET /api/v1/instances/{id}/console", control(s.handleConsole))
+
+	mux.HandleFunc("POST /api/v1/instances", admin(s.handleCreateInstance))
+	mux.HandleFunc("DELETE /api/v1/instances/{id}", admin(s.handleDeleteInstance))
+	mux.HandleFunc("PUT /api/v1/instances/{id}/settings", admin(s.handleUpdateSettings))
+	mux.HandleFunc("GET /api/v1/instances/{id}/files", admin(s.handleListFiles))
+	mux.HandleFunc("DELETE /api/v1/instances/{id}/files", admin(s.handleDeleteFile))
+	mux.HandleFunc("POST /api/v1/instances/{id}/files/mkdir", admin(s.handleMkdir))
+	mux.HandleFunc("GET /api/v1/instances/{id}/files/content", admin(s.handleReadFile))
+	mux.HandleFunc("PUT /api/v1/instances/{id}/files/content", admin(s.handleWriteFile))
+	mux.HandleFunc("GET /api/v1/instances/{id}/backups", admin(s.handleListBackups))
+	mux.HandleFunc("POST /api/v1/instances/{id}/backups", admin(s.handleCreateBackup))
+	mux.HandleFunc("POST /api/v1/instances/{id}/backups/{name}/restore", admin(s.handleRestoreBackup))
+	mux.HandleFunc("DELETE /api/v1/instances/{id}/backups/{name}", admin(s.handleDeleteBackup))
+	mux.HandleFunc("GET /api/v1/tokens", admin(s.handleListTokens))
+	mux.HandleFunc("POST /api/v1/tokens", admin(s.handleCreateToken))
+	mux.HandleFunc("DELETE /api/v1/tokens/{tokenId}", admin(s.handleDeleteToken))
+	mux.HandleFunc("GET /api/v1/webhooks", admin(s.handleListWebhooks))
+	mux.HandleFunc("POST /api/v1/webhooks", admin(s.handleCreateWebhook))
+	mux.HandleFunc("DELETE /api/v1/webhooks/{webhookId}", admin(s.handleDeleteWebhook))
+	mux.HandleFunc("POST /api/v1/webhooks/{webhookId}/test", admin(s.handleTestWebhook))
 	mux.HandleFunc("GET /agent/connect", s.handleAgentConnect)
 	if s.cfg.WebDir != "" {
 		mux.Handle("/", noCacheHTML(http.FileServer(http.Dir(s.cfg.WebDir))))
@@ -96,25 +126,6 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	s.sessions[token] = time.Now().Add(24 * time.Hour)
 	s.mu.Unlock()
 	writeJSON(w, http.StatusOK, map[string]string{"token": token})
-}
-
-// requireAuth checks the session token. Browsers can't set headers on a
-// WebSocket, so the token may also come as ?access_token=.
-func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if token == "" {
-			token = r.URL.Query().Get("access_token")
-		}
-		s.mu.Lock()
-		expiry, ok := s.sessions[token]
-		s.mu.Unlock()
-		if !ok || time.Now().After(expiry) {
-			writeError(w, http.StatusUnauthorized, "not logged in")
-			return
-		}
-		next(w, r)
-	}
 }
 
 func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {

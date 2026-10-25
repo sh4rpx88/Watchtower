@@ -1,6 +1,7 @@
 # Panel API
 
-Base path: `/api/v1`. All endpoints except `health` and `login` need `Authorization: Bearer <token>`
+Base path: `/api/v1`. All endpoints except `health` and `login` need `Authorization: Bearer <token>`, either a login
+session token or an API token (see below),
 (or `?access_token=<token>` for the console WebSocket, since browsers can't set headers there).
 
 | Method | Path | What it does |
@@ -32,11 +33,49 @@ Base path: `/api/v1`. All endpoints except `health` and `login` need `Authorizat
 
 Server states: `not_installed`, `installing`, `stopped`, `starting`, `running`, `stopping`, `error`.
 
-## Planned for integrations
+## Stats
 
-- Scoped API tokens (read-only or control, per instance) for bots and scripts.
-- `GET /instances/{id}/stats`: status, players online, player list, uptime, CPU, RAM.
-- Events over WebSocket and outgoing webhooks: player join and leave, server start, stop, crash, backup done.
+| Method | Path | What it does |
+| --- | --- | --- |
+| GET | `/stats` | Stats for every server |
+| GET | `/instances/{id}/stats` | Stats for one server |
+
+```json
+{"id": "…", "name": "Survival", "game": "Minecraft (Java Edition)", "state": "running", "ready": true,
+ "players": ["Alex", "Steve"], "playerCount": 2, "maxPlayers": 20, "uptimeSeconds": 5400,
+ "cpuPercent": 12.5, "memoryBytes": 1610612736}
+```
+
+Players are followed from console output using each template's `stats` patterns, so the list starts empty if the panel
+restarts while a server is running and fills in as players join. CPU and memory come from `docker stats` every 10 seconds.
+
+## API tokens
+
+Create tokens on the dashboard under **Integrations**, or with `POST /tokens {"name", "scope"}` (admin only; the secret
+is in the response once). Send them as `Authorization: Bearer wt_…`.
+
+| Scope | Can use |
+| --- | --- |
+| `read` | `GET` agents, templates, instances, stats |
+| `control` | read, plus install, start, stop, restart, console commands, and the console stream |
+| admin (logged-in session) | everything, including settings, files, backups, tokens, and webhooks |
+
+`GET /tokens`, `POST /tokens`, `DELETE /tokens/{id}` manage them.
+
+## Webhooks
+
+`POST /webhooks {"name", "url", "format": "discord" | "json", "events": [...]}` (admin only). Events:
+`player.join`, `player.leave`, `server.ready`, `server.stopped`, `server.crashed`.
+
+- `discord` posts `{"content": "**Survival**: Steve joined (3/20 online)"}`, so a Discord channel webhook URL works as is.
+- `json` posts the event:
+
+```json
+{"type": "player.join", "time": "2026-10-25T07:00:00Z", "instance": {"id": "…", "name": "Survival", "game": "Minecraft (Java Edition)"},
+ "player": "Steve", "playerCount": 3, "maxPlayers": 20}
+```
+
+`GET /webhooks`, `DELETE /webhooks/{id}`, and `POST /webhooks/{id}/test` (sends a sample message) manage them.
 
 ## Agent protocol
 
