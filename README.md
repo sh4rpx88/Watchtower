@@ -1,4 +1,4 @@
-# Server Panel
+# Watchtower
 
 A self-hosted, open source web panel for running game servers, in the spirit of CubeCoders AMP.
 The first games are **Minecraft (Java)** and **Project Zomboid**, on Debian Linux with Docker.

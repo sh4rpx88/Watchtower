@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"serverpanel/internal/agent"
+	"github.com/sh4rpx88/Watchtower/internal/agent"
 )
 
 func main() {

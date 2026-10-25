@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"serverpanel/internal/agent"
-	"serverpanel/internal/templates"
+	"github.com/sh4rpx88/Watchtower/internal/agent"
+	"github.com/sh4rpx88/Watchtower/internal/templates"
 )
 
 func TestLoginAndAgentConnect(t *testing.T) {

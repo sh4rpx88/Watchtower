@@ -14,7 +14,7 @@ import (
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 
-	"serverpanel/internal/protocol"
+	"github.com/sh4rpx88/Watchtower/internal/protocol"
 )
 
 const Version = "0.1.0-dev"

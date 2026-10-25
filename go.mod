@@ -1,4 +1,4 @@
-module serverpanel
+module github.com/sh4rpx88/Watchtower
 
 go 1.24.7
 

@@ -7,8 +7,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"serverpanel/internal/panel"
-	"serverpanel/internal/templates"
+	"github.com/sh4rpx88/Watchtower/internal/panel"
+	"github.com/sh4rpx88/Watchtower/internal/templates"
 )
 
 func main() {

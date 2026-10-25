@@ -37,7 +37,7 @@ function Login({ onLogin }: { onLogin: (token: string) => void }) {
   }
   return (
     <form className="card login" onSubmit={submit}>
-      <h1>Server Panel</h1>
+      <h1>Watchtower</h1>
       <input type="password" placeholder="Admin password" value={password} onChange={(e) => setPassword(e.target.value)} />
       <button type="submit">Log in</button>
       {error && <p className="error">{error}</p>}
@@ -65,7 +65,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   return (
     <main>
       <header>
-        <h1>Server Panel</h1>
+        <h1>Watchtower</h1>
         <button onClick={onLogout}>Log out</button>
       </header>
       <section className="card">
