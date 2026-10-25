@@ -365,7 +365,7 @@ func TestStatsTokensAndWebhooks(t *testing.T) {
 	say("[12:00:01] [Server thread/INFO]: Steve joined the game")
 	expect(EventPlayerJoin, "Steve")
 	say("[12:00:02] [Server thread/INFO]: <Steve> Alex joined the game") // chat, not a join
-	say("[12:00:03] [Server thread/INFO]: Alex joined the game")
+	say("[12:00:03] [Server thread/INFO]: \x1b[0;33;22mAlex joined the game\x1b[m")
 	expect(EventPlayerJoin, "Alex")
 
 	var st Stats

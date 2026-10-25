@@ -69,6 +69,7 @@ func (t *statsTracker) observe(id, line string, st templates.Stats) (joined, lef
 	if ls == nil {
 		return "", "", false // not running
 	}
+	line = plainText(line)
 	if r := t.re(st.Ready); r != nil && !ls.ready && r.MatchString(line) {
 		ls.ready = true
 		ready = true
@@ -86,6 +87,15 @@ func (t *statsTracker) observe(id, line string, st templates.Stats) (joined, lef
 		}
 	}
 	return joined, left, ready
+}
+
+// formatting matches ANSI escape sequences and Minecraft's § color codes,
+// which games may put around player names in console output.
+var formatting = regexp.MustCompile(`\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07|§[0-9a-fk-orA-FK-OR]|\r`)
+
+// plainText removes formatting so stats patterns match what a person sees.
+func plainText(line string) string {
+	return formatting.ReplaceAllString(line, "")
 }
 
 func matchPlayer(r *regexp.Regexp, line string) string {
