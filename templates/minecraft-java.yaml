@@ -1,7 +1,7 @@
 id: minecraft-java
 name: Minecraft (Java Edition)
 description: Vanilla Minecraft Java server.
-image: eclipse-temurin:21-jre
+image: "eclipse-temurin:{{.javaVersion}}-jre"  # javaVersion comes from the release being installed
 install:
   method: mojang   # server.jar from Mojang's version manifest
   version: latest  # "latest" or a release such as 1.21.4

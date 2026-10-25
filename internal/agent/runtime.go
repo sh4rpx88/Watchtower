@@ -99,6 +99,9 @@ func (d DockerRuntime) installMojang(ctx context.Context, version, dir string, o
 		Downloads struct {
 			Server struct{ URL, SHA1 string }
 		}
+		JavaVersion struct {
+			MajorVersion int `json:"majorVersion"`
+		} `json:"javaVersion"`
 	}
 	if err := d.getJSON(ctx, versionURL, &meta); err != nil {
 		return fmt.Errorf("version %s: %w", version, err)
@@ -110,8 +113,45 @@ func (d DockerRuntime) installMojang(ctx context.Context, version, dir string, o
 	if err := d.download(ctx, meta.Downloads.Server.URL, filepath.Join(dir, "server.jar"), meta.Downloads.Server.SHA1); err != nil {
 		return err
 	}
-	out("Minecraft server " + version + " installed")
+	java := meta.JavaVersion.MajorVersion
+	if java == 0 {
+		java = 8 // versions before 1.17 don't say
+	}
+	if err := saveInstallVars(dir, map[string]string{"javaVersion": fmt.Sprint(java)}); err != nil {
+		return err
+	}
+	out(fmt.Sprintf("Minecraft server %s installed (needs Java %d)", version, java))
 	return nil
+}
+
+// installVarsFile holds values learned during install, such as the Java
+// version a Minecraft release needs. Templates use them like settings.
+const installVarsFile = ".watchtower-install.json"
+
+func saveInstallVars(dir string, vars map[string]string) error {
+	data, err := json.Marshal(vars)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, installVarsFile), data, 0o644)
+}
+
+// templateVars merges install vars with the instance's settings; settings win.
+func templateVars(spec protocol.InstanceSpec, dir string) (map[string]string, error) {
+	vars := map[string]string{}
+	data, err := os.ReadFile(filepath.Join(dir, installVarsFile))
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	if err == nil {
+		if err := json.Unmarshal(data, &vars); err != nil {
+			return nil, fmt.Errorf("%s: %w", installVarsFile, err)
+		}
+	}
+	for k, v := range spec.Settings {
+		vars[k] = v
+	}
+	return vars, nil
 }
 
 func (d DockerRuntime) client() *http.Client {
@@ -173,11 +213,15 @@ func (d DockerRuntime) download(ctx context.Context, url, dest, wantSHA1 string)
 }
 
 func (d DockerRuntime) Start(spec protocol.InstanceSpec, dir string, out func(string)) (Process, error) {
-	args, err := dockerRunArgs(spec, dir)
+	vars, err := templateVars(spec, dir)
 	if err != nil {
 		return nil, err
 	}
-	if err := writeFiles(spec, dir); err != nil {
+	args, err := dockerRunArgs(spec, dir, vars)
+	if err != nil {
+		return nil, fmt.Errorf("%w (if the game was installed by an older version, press Update)", err)
+	}
+	if err := writeFiles(spec, dir, vars); err != nil {
 		return nil, err
 	}
 	// Clear a container left behind by a crash.
@@ -229,18 +273,22 @@ func (d DockerRuntime) Running(out func(id string) func(string)) (map[string]Pro
 }
 
 // dockerRunArgs builds the docker run command line for an instance.
-func dockerRunArgs(spec protocol.InstanceSpec, dir string) ([]string, error) {
+func dockerRunArgs(spec protocol.InstanceSpec, dir string, vars map[string]string) ([]string, error) {
 	t := spec.Template
-	start, err := templates.Render(t.Start, spec.Settings)
+	start, err := templates.Render(t.Start, vars)
 	if err != nil {
 		return nil, fmt.Errorf("start command: %w", err)
+	}
+	image, err := templates.Render(t.Image, vars)
+	if err != nil {
+		return nil, fmt.Errorf("image: %w", err)
 	}
 	args := []string{"run", "-d", "-i", "--rm", "--init",
 		"--name", containerName(spec.ID),
 		"--label", "watchtower.instance=" + spec.ID,
 		"-v", dir + ":/server", "-w", "/server"}
 	for _, k := range sortedKeys(t.Env) {
-		v, err := templates.Render(t.Env[k], spec.Settings)
+		v, err := templates.Render(t.Env[k], vars)
 		if err != nil {
 			return nil, fmt.Errorf("env %s: %w", k, err)
 		}
@@ -258,14 +306,14 @@ func dockerRunArgs(spec protocol.InstanceSpec, dir string) ([]string, error) {
 		// The server listens on the template port inside its container.
 		args = append(args, "-p", fmt.Sprintf("%d:%d/%s", host, p.Port, proto))
 	}
-	args = append(args, t.Image, "sh", "-c", "exec "+start)
+	args = append(args, image, "sh", "-c", "exec "+start)
 	return args, nil
 }
 
 // writeFiles writes the template's files (such as eula.txt) into dir.
-func writeFiles(spec protocol.InstanceSpec, dir string) error {
+func writeFiles(spec protocol.InstanceSpec, dir string, vars map[string]string) error {
 	for name, contents := range spec.Template.Files {
-		rendered, err := templates.Render(contents, spec.Settings)
+		rendered, err := templates.Render(contents, vars)
 		if err != nil {
 			return fmt.Errorf("file %s: %w", name, err)
 		}
