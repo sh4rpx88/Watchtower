@@ -36,6 +36,9 @@ AGENT_TOKEN=dev AGENT_DATA_DIR=$PWD/data/agent go run ./cmd/agent
 cd web && npm install && npm run dev   # UI on :5173, proxies /api to :8080
 ```
 
+The web UI's artwork lives in `web/public/art/`. Game pictures are picked by template ID (`minecraft-java.jpg`,
+`project-zomboid.jpg`, …), and a template without one gets `keep.jpg`.
+
 ## Roadmap
 
 1. Skeleton: panel and agent connected, login, Docker Compose *(done)*

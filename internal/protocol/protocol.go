@@ -74,6 +74,9 @@ type Welcome struct {
 type Heartbeat struct {
 	UptimeSeconds int64 `json:"uptimeSeconds"`
 	NumCPU        int   `json:"numCpu"`
+	MemoryTotal   int64 `json:"memoryTotal,omitempty"` // bytes; 0 when unknown
+	DiskTotal     int64 `json:"diskTotal,omitempty"`   // bytes on the data directory's filesystem
+	DiskFree      int64 `json:"diskFree,omitempty"`
 }
 
 // InstanceSpec is everything an agent needs to install or start an instance.

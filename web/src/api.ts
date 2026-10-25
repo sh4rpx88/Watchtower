@@ -7,6 +7,9 @@ export type Agent = {
   connectedAt: string;
   lastHeartbeat: string;
   numCpu: number;
+  memoryTotal?: number;
+  diskTotal?: number;
+  diskFree?: number;
 };
 
 export type ConfigField = {
@@ -95,7 +98,7 @@ export function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1 << 20) return `${(bytes / 1024).toFixed(1)} KB`;
   if (bytes < 1 << 30) return `${(bytes / (1 << 20)).toFixed(1)} MB`;
-  return `${(bytes / (1 << 30)).toFixed(2)} GB`;
+  return `${(bytes / (1 << 30)).toFixed(1)} GB`;
 }
 
 export type Stats = {
@@ -121,4 +124,22 @@ export function formatDuration(seconds: number): string {
   if (d) return `${d}d ${h}h`;
   if (h) return `${h}h ${m}m`;
   return `${m}m`;
+}
+
+export type ActivityEvent = {
+  type: string;
+  time: string;
+  instance: { id: string; name: string; game: string };
+  player?: string;
+  playerCount: number;
+  maxPlayers?: number;
+  error?: string;
+};
+
+// parseSize reads sizes like "2G" or "512M" from game settings, in bytes.
+export function parseSize(value: string | undefined): number {
+  const m = /^(\d+(?:\.\d+)?)\s*([KMGT]?)B?$/i.exec(value?.trim() ?? "");
+  if (!m) return 0;
+  const units: Record<string, number> = { "": 1, K: 1 << 10, M: 1 << 20, G: 1 << 30, T: 2 ** 40 };
+  return Number(m[1]) * units[m[2].toUpperCase()];
 }
