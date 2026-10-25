@@ -16,6 +16,7 @@ Base path: `/api/v1`. All endpoints except `health` and `login` need `Authorizat
 | POST | `/instances/{id}/install` | Install or update the game files |
 | POST | `/instances/{id}/start` | Start |
 | POST | `/instances/{id}/stop` | Send the game's stop command; killed after 60 s |
+| POST | `/instances/{id}/restart` | Stop, then start again once stopped |
 | POST | `/instances/{id}/command` | `{"line": "say hi"}` to the server console |
 | DELETE | `/instances/{id}` | Delete a stopped server and its files |
 | GET (WebSocket) | `/instances/{id}/console` | Last 500 console lines, then new lines as JSON strings |

@@ -399,6 +399,9 @@ function ServerView({
         <button disabled={busy || !canStop} onClick={() => act("/stop")}>
           Stop
         </button>
+        <button disabled={busy || s !== "running"} onClick={() => act("/restart")}>
+          Restart
+        </button>
         <button disabled={busy || canStop || s === "installing"} className="danger" onClick={remove}>
           Delete
         </button>
@@ -418,7 +421,7 @@ function ServerView({
         <ServerSettings key={instance.id} token={token} instance={instance} template={template} onSaved={onChanged} />
       )}
       {tab === "files" &&
-        (installed && instance.agentOnline ? <Files token={token} id={instance.id} /> : <p className="muted">Install the server and keep its machine online to manage files.</p>)}
+        (installed && instance.agentOnline ? <Files token={token} instance={instance} template={template} /> : <p className="muted">Install the server and keep its machine online to manage files.</p>)}
       {tab === "backups" &&
         (installed && instance.agentOnline ? <Backups token={token} instance={instance} /> : <p className="muted">Install the server and keep its machine online to manage backups.</p>)}
     </section>

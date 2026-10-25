@@ -255,6 +255,19 @@ func TestInstanceLifecycle(t *testing.T) {
 		t.Fatalf("files: %+v", files)
 	}
 
+	// Restart stops the server and starts it again.
+	c.do("POST", "/api/v1/instances/"+in.ID+"/restart", nil, http.StatusOK, nil)
+	c.waitState(in.ID, protocol.StateRunning)
+	for {
+		var line string
+		if err := wsjson.Read(ctx, ws, &line); err != nil {
+			t.Fatalf("console: %v", err)
+		}
+		if line == "server started" {
+			break
+		}
+	}
+
 	// Running servers can't be deleted.
 	c.do("DELETE", "/api/v1/instances/"+in.ID, nil, http.StatusConflict, nil)
 	c.do("POST", "/api/v1/instances/"+in.ID+"/stop", nil, http.StatusOK, nil)

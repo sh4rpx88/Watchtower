@@ -28,3 +28,4 @@ button.danger { color: #c33; }
 .files td.actions, .backups td.actions { justify-content: flex-end; margin: 0; }
 .files textarea { width: 100%; box-sizing: border-box; height: 420px; font-family: ui-monospace, monospace; font-size: 13px; }
 label.button { border: 1px solid #8886; border-radius: 3px; padding: 6px 10px; cursor: pointer; }
+.warning { color: #b7791f; }

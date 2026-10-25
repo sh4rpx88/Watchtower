@@ -1,12 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
-import { FileInfo, api, formatSize, raw } from "./api";
+import { FileInfo, Instance, Template, api, formatSize, raw } from "./api";
 
 const join = (dir: string, name: string) => (dir === "/" ? `/${name}` : `${dir}/${name}`);
 const parent = (dir: string) => dir.slice(0, dir.lastIndexOf("/")) || "/";
 const q = (path: string) => `?path=${encodeURIComponent(path)}`;
 
+// managedKeys lists the settings Watchtower writes into this file on every
+// start, so hand edits to them would be overwritten.
+function managedKeys(path: string, instance: Instance, template?: Template): string[] {
+  const fill = (s: string) => s.replace(/\{\{\s*\.(\w+)\s*\}\}/g, (_, k) => instance.settings[k] ?? "");
+  return (template?.config ?? []).filter((f) => f.file && "/" + fill(f.file) === path).map((f) => f.key);
+}
+
 // Files browses and edits an instance's folder.
-export default function Files({ token, id }: { token: string; id: string }) {
+export default function Files({ token, instance, template }: { token: string; instance: Instance; template?: Template }) {
+  const id = instance.id;
   const [dir, setDir] = useState("/");
   const [entries, setEntries] = useState<FileInfo[]>([]);
   const [editing, setEditing] = useState<{ path: string; text: string } | null>(null);
@@ -76,7 +84,13 @@ export default function Files({ token, id }: { token: string; id: string }) {
             <button onClick={() => setEditing(null)}>Cancel</button>
           </span>
         </div>
-        <p className="muted">Changes to game config files usually need a restart to take effect.</p>
+        <p className="muted">Most games read their config files only at startup, so restart the server after saving.</p>
+        {managedKeys(editing.path, instance, template).length > 0 && (
+          <p className="warning">
+            Set these on the Settings tab instead; Watchtower writes them into this file on every start:{" "}
+            {managedKeys(editing.path, instance, template).join(", ")}
+          </p>
+        )}
         <textarea value={editing.text} onChange={(e) => setEditing({ ...editing, text: e.target.value })} spellCheck={false} />
         {error && <p className="error">{error}</p>}
       </div>

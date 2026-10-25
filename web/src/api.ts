@@ -15,6 +15,7 @@ export type ConfigField = {
   type: "string" | "int" | "bool" | "select";
   default: string;
   options?: string[];
+  file?: string;
   required?: boolean;
 };
 
