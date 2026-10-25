@@ -1,6 +1,7 @@
 package panel
 
 import (
+	"context"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
@@ -11,13 +12,15 @@ import (
 	"time"
 )
 
-// Access levels, lowest first. A logged-in admin session has every level.
+// Access levels, lowest first. Users get theirs from their role, API tokens
+// from their scope.
 type level int
 
 const (
-	levelRead    level = iota // stats, server list, templates
+	levelRead    level = iota // stats, server list, templates, activity
 	levelControl              // plus start, stop, restart, install, commands, console
-	levelAdmin                // everything: create, delete, settings, files, backups, tokens, webhooks
+	levelManage               // plus settings, files, backups
+	levelAdmin                // everything: create and delete servers, users, tokens, webhooks
 )
 
 // APIToken lets a bot or script use the API without the admin password.
@@ -39,28 +42,42 @@ func hashToken(secret string) string {
 	return hex.EncodeToString(h[:])
 }
 
-// authLevel returns the access the request's token grants, or ok=false.
-func (s *Server) authLevel(r *http.Request) (level, bool) {
-	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if token == "" {
-		token = r.URL.Query().Get("access_token")
+// bearer is the request's session token or API token.
+func bearer(r *http.Request) string {
+	if token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "); token != "" {
+		return token
 	}
-	if token == "" {
-		return 0, false
-	}
-	if strings.HasPrefix(token, tokenPrefix) {
-		return s.apiTokenLevel(token)
-	}
-	s.mu.Lock()
-	expiry, ok := s.sessions[token]
-	s.mu.Unlock()
-	if !ok || time.Now().After(expiry) {
-		return 0, false
-	}
-	return levelAdmin, true
+	return r.URL.Query().Get("access_token")
 }
 
-func (s *Server) apiTokenLevel(secret string) (level, bool) {
+// authenticate works out who is making the request, or returns ok=false.
+func (s *Server) authenticate(r *http.Request) (principal, bool) {
+	token := bearer(r)
+	if token == "" {
+		return principal{}, false
+	}
+	if strings.HasPrefix(token, tokenPrefix) {
+		return s.apiTokenPrincipal(token)
+	}
+	s.mu.Lock()
+	sess, ok := s.sessions[token]
+	if ok && time.Now().After(sess.expiry) {
+		delete(s.sessions, token)
+		ok = false
+	}
+	s.mu.Unlock()
+	if !ok {
+		return principal{}, false
+	}
+	// Look the user up each time, so role changes apply at once.
+	u, ok := s.userByID(sess.userID)
+	if !ok {
+		return principal{}, false
+	}
+	return principal{Name: u.Username, Level: roleLevels[u.Role], UserID: u.ID, Role: u.Role}, true
+}
+
+func (s *Server) apiTokenPrincipal(secret string) (principal, bool) {
 	hash := hashToken(secret)
 	var found *APIToken
 	for _, t := range s.tokens.all() {
@@ -70,7 +87,7 @@ func (s *Server) apiTokenLevel(secret string) (level, bool) {
 		}
 	}
 	if found == nil {
-		return 0, false
+		return principal{}, false
 	}
 	// Record use at most once a minute to keep file writes rare.
 	if found.LastUsed == nil || time.Since(*found.LastUsed) > time.Minute {
@@ -84,25 +101,30 @@ func (s *Server) apiTokenLevel(secret string) (level, bool) {
 			return ts
 		})
 	}
+	p := principal{Name: "token " + found.Name, Level: levelRead, Role: "token"}
 	if found.Scope == "control" {
-		return levelControl, true
+		p.Level = levelControl
 	}
-	return levelRead, true
+	return p, true
 }
 
 // auth wraps a handler so it needs at least the given access level.
 func (s *Server) auth(need level, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		have, ok := s.authLevel(r)
+		p, ok := s.authenticate(r)
 		if !ok {
 			writeError(w, http.StatusUnauthorized, "not logged in")
 			return
 		}
-		if have < need {
-			writeError(w, http.StatusForbidden, "this API token isn't allowed to do that")
+		if p.Level < need {
+			msg := "your role isn't allowed to do that"
+			if p.UserID == "" {
+				msg = "this API token isn't allowed to do that"
+			}
+			writeError(w, http.StatusForbidden, msg)
 			return
 		}
-		next(w, r)
+		next(w, r.WithContext(context.WithValue(r.Context(), principalKey{}, p)))
 	}
 }
 
@@ -139,13 +161,19 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t.Hash = ""
+	noteFor(r).text = t.Name
 	writeJSON(w, http.StatusCreated, map[string]any{"token": t, "secret": secret})
 }
 
 func (s *Server) handleDeleteToken(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("tokenId")
 	err := s.tokens.change(func(ts []APIToken) []APIToken {
-		return slices.DeleteFunc(ts, func(t APIToken) bool { return t.ID == id })
+		return slices.DeleteFunc(ts, func(t APIToken) bool {
+			if t.ID == id {
+				noteFor(r).text = t.Name
+			}
+			return t.ID == id
+		})
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

@@ -22,7 +22,8 @@ cp .env.example .env            # set a password and an agent token
 docker compose up -d
 ```
 
-Then open http://localhost:8080, click **New server**, pick a game, and press **Install**, then **Start**.
+Then open http://localhost:8080 and log in as `admin` with the password from `.env`. Under **Users** you can add
+people as viewers, operators or admins. Click **Add server**, pick a game, and press **Install**, then **Start**.
 Game servers run as their own containers named `watchtower-<id>` and keep running if the agent restarts.
 Server files live in `/srv/watchtower/instances/` and backups in `/srv/watchtower/backups/`; keep an eye on disk space.
 Remember to open the game ports (for example 25565/tcp for Minecraft, 16261-16262/udp for Project Zomboid) on your router or firewall.
@@ -44,7 +45,7 @@ The web UI's artwork lives in `web/public/art/`. Game pictures are picked by tem
 1. Skeleton: panel and agent connected, login, Docker Compose *(done)*
 2. First games end to end: install, start, stop, live console *(done)*
 3. Daily use: config editor, file manager, backups, stats API with tokens and webhooks *(done)*
-4. Users: roles, per-instance access, audit log
+4. Users: accounts with roles and an activity log *(done)*; per-server access later
 5. Scale out: remote agents, scheduler, auto-updates, Discord bot
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) to help. Licensed under MIT.

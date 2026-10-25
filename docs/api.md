@@ -7,7 +7,10 @@ session token or an API token (see below),
 | Method | Path | What it does |
 | --- | --- | --- |
 | GET | `/health` | Panel status and version |
-| POST | `/login` | `{"password": "..."}` returns `{"token": "..."}` |
+| POST | `/login` | `{"username": "...", "password": "..."}` returns `{"token": "..."}`; sessions last 24 hours |
+| POST | `/logout` | End this session |
+| GET | `/me` | `{"name", "role"}` for whoever is calling (role is `token` for API tokens) |
+| PUT | `/me/password` | `{"current", "new"}`; logs out your other sessions |
 | GET | `/agents` | Connected machines |
 | GET | `/templates` | Available games |
 | GET | `/instances` | All servers, with state and whether their machine is online |
@@ -50,10 +53,38 @@ Players are followed from console output using each template's `stats` patterns,
 restarts while a server is running and fills in as players join. CPU and memory come from `docker stats` every 10 seconds.
 `cpuPercent` is per core, as Docker reports it, so a server using two full cores shows 200.
 
-## Recent activity
+## Users and roles
 
-`GET /activity` (read) returns the last 50 events, newest first, in the same shape webhooks receive. It's kept in
-memory, so it starts empty when the panel restarts.
+Each person logs in with their own username. The first admin, `admin`, is created from `PANEL_ADMIN_PASSWORD` when
+there are no users yet; after that, change passwords in the UI (changing the variable does nothing).
+
+| Who | Can use |
+| --- | --- |
+| `viewer` user, `read` token | servers, templates, machines, stats, activity |
+| `control` token | read, plus install, start, stop, restart, console commands, and the console stream |
+| `operator` user | control, plus settings, files and backups |
+| `admin` user | everything: creating and deleting servers, users, tokens and webhooks |
+
+Admins manage users with `GET /users`, `POST /users {"username", "password", "role"}`,
+`PATCH /users/{id} {"role"?, "password"?}` and `DELETE /users/{id}`. Passwords need 8 characters. The last admin can't
+be demoted or removed, and nobody can remove themselves. Role changes apply on the next request; password resets and
+removals log the user out.
+
+## Activity log
+
+`GET /activity` returns the newest entries first. Options: `limit` (default 50, up to 1000), `instance=<id>`, and
+`kind=action` (what people did) or `kind=game` (players and servers). The panel keeps the last 1,000 in
+`activity.jsonl` in its data directory.
+
+Game events look like webhook events. Actions add who and what, with `instance` left out when there isn't one:
+
+```json
+{"type": "action", "time": "…", "instance": {"id": "…", "name": "Survival", "game": "…"},
+ "actor": "sh4rpx", "message": "started the server", "playerCount": 0}
+```
+
+Logged actions: logging in, password changes, user changes, creating and deleting servers, install, start, stop,
+restart, console commands, settings, file saves and deletes, new folders, backups, tokens and webhooks.
 
 `GET /agents` reports each machine's `numCpu`, and on Linux also `memoryTotal`, `diskTotal` and `diskFree` in bytes
 (disk is for the filesystem holding the agent's data directory).
@@ -63,11 +94,7 @@ memory, so it starts empty when the panel restarts.
 Create tokens on the dashboard under **Integrations**, or with `POST /tokens {"name", "scope"}` (admin only; the secret
 is in the response once). Send them as `Authorization: Bearer wt_…`.
 
-| Scope | Can use |
-| --- | --- |
-| `read` | `GET` agents, templates, instances, stats |
-| `control` | read, plus install, start, stop, restart, console commands, and the console stream |
-| admin (logged-in session) | everything, including settings, files, backups, tokens, and webhooks |
+Scopes are `read` and `control`; see the table under Users and roles.
 
 `GET /tokens`, `POST /tokens`, `DELETE /tokens/{id}` manage them.
 

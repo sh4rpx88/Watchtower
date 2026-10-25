@@ -53,11 +53,11 @@ export class ApiError extends Error {
   }
 }
 
-export async function login(password: string): Promise<string> {
+export async function login(username: string, password: string): Promise<string> {
   const res = await fetch("/api/v1/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ password }),
+    body: JSON.stringify({ username, password }),
   });
   if (!res.ok) throw new ApiError((await res.json()).error ?? "Login failed", res.status);
   return (await res.json()).token;
@@ -134,7 +134,13 @@ export type ActivityEvent = {
   playerCount: number;
   maxPlayers?: number;
   error?: string;
+  actor?: string;
+  message?: string;
 };
+
+export type Role = "viewer" | "operator" | "admin";
+export type Me = { name: string; role: Role | "token" };
+export type User = { id: string; username: string; role: Role; createdAt: string; lastLogin?: string };
 
 // parseSize reads sizes like "2G" or "512M" from game settings, in bytes.
 export function parseSize(value: string | undefined): number {
