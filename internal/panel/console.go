@@ -51,6 +51,17 @@ func (c *consoles) subscribe(id string) ([]string, chan string, func()) {
 	}
 }
 
+// tail returns up to n of the latest lines.
+func (c *consoles) tail(id string, n int) []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	log := c.logs[id]
+	if len(log) > n {
+		log = log[len(log)-n:]
+	}
+	return append([]string(nil), log...)
+}
+
 func (c *consoles) forget(id string) {
 	c.mu.Lock()
 	delete(c.logs, id)

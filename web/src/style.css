@@ -44,7 +44,7 @@ input, select, textarea {
 input[type="checkbox"], input[type="radio"] { accent-color: var(--red-bright); }
 .integration .create, .card > .create { margin: 8px 0; }
 input:focus, select:focus, textarea:focus { outline: 1px solid var(--red); border-color: var(--red); }
-button, label.button {
+button, label.button, a.button {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   background: linear-gradient(#211d1f, #171416);
   border: 1px solid var(--line);
@@ -52,7 +52,7 @@ button, label.button {
   padding: 7px 14px;
   cursor: pointer;
 }
-button:hover:not(:disabled), label.button:hover { border-color: #4a3e43; background: linear-gradient(#2a2427, #1c181a); }
+button:hover:not(:disabled), label.button:hover, a.button:hover { border-color: #4a3e43; background: linear-gradient(#2a2427, #1c181a); }
 button:disabled { opacity: 0.4; cursor: default; }
 button.primary {
   background: linear-gradient(#a51d27, #7c141c);
@@ -377,3 +377,18 @@ button.copy { padding: 4px 6px; min-height: 0; }
   .search.small { min-width: 0; width: 100%; }
   .config-grid { grid-template-columns: minmax(0, 1fr); padding: 4px 10px 12px; }
 }
+
+/* Discord bot */
+.integration-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.integration-head h3 { margin: 0; }
+.pill { font-size: 0.78rem; border-radius: 999px; padding: 2px 10px; border: 1px solid var(--line); color: var(--muted); }
+.pill.ok { color: var(--green, #3fb950); border-color: #2a5a33; background: #0f1d12; }
+.pill.bad { color: #ff8a8f; border-color: #6a2329; background: #1f0d10; }
+.pill.wait { color: #e3b341; border-color: #5a4a1d; }
+.guide { border: 1px solid var(--line); border-radius: 3px; padding: 10px 14px; margin: 10px 0; background: #121011; }
+.guide summary { cursor: pointer; color: #e2dad3; }
+.guide ol { padding-left: 20px; line-height: 1.55; }
+.guide li { margin: 6px 0; }
+.guide a, .integration a { color: #e9a3a7; }
+.create .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+a.button { color: var(--text) !important; text-decoration: none; }

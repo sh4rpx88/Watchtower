@@ -69,6 +69,7 @@ type client struct {
 	t     *testing.T
 	base  string
 	token string
+	srv   *Server
 }
 
 func (c *client) do(method, path string, body any, want int, out any) {
@@ -127,12 +128,19 @@ func (c *client) waitState(id, want string) {
 	}
 }
 
-func setup(t *testing.T) (*client, func()) {
+func setup(t *testing.T) (*client, func()) { return setupWith(t, nil) }
+
+// setupWith is setup with a chance to change the panel's config first.
+func setupWith(t *testing.T, change func(*Config)) (*client, func()) {
 	tpls, err := templates.LoadDir("../../templates")
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := New(Config{AdminPassword: "pw", AgentToken: "agent-secret", Templates: tpls})
+	cfg := Config{AdminPassword: "pw", AgentToken: "agent-secret", Templates: tpls}
+	if change != nil {
+		change(&cfg)
+	}
+	s, err := New(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +152,7 @@ func setup(t *testing.T) (*client, func()) {
 	}
 	var login struct{ Token string }
 	json.NewDecoder(resp.Body).Decode(&login)
-	c := &client{t: t, base: srv.URL, token: login.Token}
+	c := &client{t: t, base: srv.URL, token: login.Token, srv: s}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go agent.Run(ctx, agent.Config{
