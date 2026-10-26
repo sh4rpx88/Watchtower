@@ -41,6 +41,9 @@ session token or an API token (see below),
 | PUT | `/instances/{id}/schedules/{scheduleId}` | Replace one |
 | DELETE | `/instances/{id}/schedules/{scheduleId}` | Remove one |
 | POST | `/instances/{id}/schedules/{scheduleId}/run` | Run it now |
+| GET | `/discord` | Discord bot settings (without the token), `hasToken`, and connection `status` (admin only) |
+| PUT | `/discord` | `{"enabled", "token", "channelId", "controlRoleId", "guildId"}`; an empty token keeps the saved one (admin only) |
+| POST | `/discord/board` | Post a fresh status board in the channel (admin only) |
 | GET | `/settings` | `{"settings": {"publicAddress", "lanAddress"}, "timeZone"}` |
 | PUT | `/settings` | `{"publicAddress", "lanAddress"}` (admin only) |
 

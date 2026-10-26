@@ -94,6 +94,7 @@ type Webhook struct {
 
 func (s *Server) emit(e Event) {
 	e = s.activity.add(e)
+	s.pokeBoard()
 	select {
 	case s.events <- e:
 	default:

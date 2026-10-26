@@ -24,6 +24,12 @@ export type ConfigField = {
   required?: boolean;
 };
 
+export type DiscordView = {
+  settings: { enabled: boolean; guildId: string; channelId: string; controlRoleId: string; boardMessageId?: string };
+  hasToken: boolean;
+  status: { connected: boolean; botName?: string; applicationId?: string; guilds?: string[]; error?: string };
+};
+
 export type Choice = { value: string; label: string };
 
 // A setting read from one of the game's own settings files.
