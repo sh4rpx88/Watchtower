@@ -154,19 +154,21 @@ func decode[T any](raw json.RawMessage) (T, error) {
 
 func dispatch(mgr *Manager, in protocol.Envelope) (any, error) {
 	switch in.Type {
-	case protocol.TypeInstall, protocol.TypeStart, protocol.TypeBackupCreate:
+	case protocol.TypeInstall, protocol.TypeStart:
 		spec, err := decode[protocol.InstanceSpec](in.Payload)
 		if err != nil {
 			return nil, err
 		}
-		switch in.Type {
-		case protocol.TypeInstall:
+		if in.Type == protocol.TypeInstall {
 			return nil, mgr.Install(spec)
-		case protocol.TypeStart:
-			return nil, mgr.Start(spec)
-		default:
-			return nil, mgr.CreateBackup(spec)
 		}
+		return nil, mgr.Start(spec)
+	case protocol.TypeBackupCreate:
+		req, err := decode[protocol.BackupCreate](in.Payload)
+		if err != nil {
+			return nil, err
+		}
+		return nil, mgr.CreateBackup(req.InstanceSpec, req.Keep)
 	case protocol.TypeStop, protocol.TypeDelete, protocol.TypeBackupList:
 		ref, err := decode[protocol.InstanceRef](in.Payload)
 		if err != nil {

@@ -26,8 +26,9 @@ var saveWait = 5 * time.Second
 func (m *Manager) backupDir(id string) string { return filepath.Join(m.dataDir, "backups", id) }
 
 // CreateBackup archives the instance folder in the background. A running
-// server is asked to save first.
-func (m *Manager) CreateBackup(spec protocol.InstanceSpec) error {
+// server is asked to save first. With keep > 0, only the newest keep backups
+// are left afterwards. The panel hears how it went through a backup.done message.
+func (m *Manager) CreateBackup(spec protocol.InstanceSpec, keep int) error {
 	in, err := m.get(spec)
 	if err != nil {
 		return err
@@ -59,11 +60,36 @@ func (m *Manager) CreateBackup(spec protocol.InstanceSpec) error {
 		size, err := writeArchive(m.dir(spec.ID), filepath.Join(m.backupDir(spec.ID), name))
 		if err != nil {
 			out("Backup failed: " + err.Error())
+			m.emit(protocol.TypeBackupDone, protocol.BackupResult{ID: spec.ID, Name: name, Error: err.Error()})
 			return
 		}
 		out(fmt.Sprintf("Backup saved: %s (%.1f MB)", name, float64(size)/(1<<20)))
+		removed := m.pruneBackups(spec.ID, keep)
+		if removed > 0 {
+			out(fmt.Sprintf("Removed %d old backup(s), keeping the newest %d", removed, keep))
+		}
+		m.emit(protocol.TypeBackupDone, protocol.BackupResult{ID: spec.ID, Name: name, Size: size, Removed: removed})
 	}()
 	return nil
+}
+
+// pruneBackups deletes all but the newest keep backups and returns how many
+// it removed. keep <= 0 keeps everything.
+func (m *Manager) pruneBackups(id string, keep int) int {
+	if keep <= 0 {
+		return 0
+	}
+	list, err := m.ListBackups(id) // newest first
+	if err != nil || len(list) <= keep {
+		return 0
+	}
+	removed := 0
+	for _, b := range list[keep:] {
+		if m.DeleteBackup(protocol.BackupRequest{ID: id, Name: b.Name}) == nil {
+			removed++
+		}
+	}
+	return removed
 }
 
 func (m *Manager) clearBusy(id string) {

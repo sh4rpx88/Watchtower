@@ -70,7 +70,7 @@ func principalOf(r *http.Request) principal {
 }
 
 // Passwords are stored as PBKDF2-SHA256 with a random salt.
-const passwordIterations = 600_000
+var passwordIterations = 600_000 // lowered in tests
 
 func hashPassword(password string) (string, error) {
 	salt := make([]byte, 16)

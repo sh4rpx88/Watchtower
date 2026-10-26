@@ -7,6 +7,8 @@ const eventLabels: Record<string, string> = {
   "server.ready": "Server ready",
   "server.stopped": "Server stopped",
   "server.crashed": "Server crashed",
+  "backup.done": "Backup saved",
+  "backup.failed": "Backup failed",
 };
 
 // Integrations manages API tokens for bots and webhooks that announce events.
@@ -49,8 +51,8 @@ function Tokens({ token }: { token: string }) {
     <div className="integration">
       <h3>API tokens</h3>
       <p className="muted">
-        For bots and scripts. <strong>Read</strong> sees servers and stats. <strong>Control</strong> can also start, stop, restart, and
-        send console commands. See docs/api.md for the endpoints.
+        For bots and scripts. <strong>Read</strong> sees servers and stats. <strong>Control</strong> can also start, stop, restart, and send
+        console commands. See docs/api.md for the endpoints.
       </p>
       {secret && (
         <p className="secret">
@@ -127,8 +129,8 @@ function Webhooks({ token }: { token: string }) {
     <div className="integration">
       <h3>Webhooks</h3>
       <p className="muted">
-        Post events to a URL. For Discord, open a channel's settings, then Integrations, Webhooks, New Webhook, and paste its URL here
-        with the Discord format.
+        Post events to a URL. For Discord, open a channel's settings, then Integrations, Webhooks, New Webhook, and paste its URL here with
+        the Discord format.
       </p>
       <table>
         <tbody>

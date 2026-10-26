@@ -38,12 +38,8 @@ export default function Backups({ token, instance }: { token: string; instance: 
   return (
     <div className="backups">
       <div className="row">
-        <span className="muted">
-          A backup saves the whole server folder. Running servers save their world first.
-        </span>
-        <button onClick={() => run(() => api(token, "POST", base), "Backup started. Watch the console for progress.")}>
-          Back up now
-        </button>
+        <span className="muted">A backup saves the whole server folder. Running servers save their world first.</span>
+        <button onClick={() => run(() => api(token, "POST", base), "Backup started. Watch the console for progress.")}>Back up now</button>
       </div>
       {backups.length === 0 ? (
         <p className="muted">No backups yet.</p>

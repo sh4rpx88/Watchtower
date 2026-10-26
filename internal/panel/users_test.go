@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 )
@@ -156,4 +157,10 @@ func TestPasswordHash(t *testing.T) {
 	if !checkPassword(h, "correct horse") || checkPassword(h, "wrong horse") || checkPassword("garbage", "x") {
 		t.Fatal("password check is wrong")
 	}
+}
+
+func TestMain(m *testing.M) {
+	passwordIterations = 1000 // hashing at full strength makes the suite slow under -race
+	dummyHash, _ = hashPassword("not a real password")
+	os.Exit(m.Run())
 }

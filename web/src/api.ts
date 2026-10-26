@@ -42,6 +42,8 @@ export type Instance = {
   state: string;
   error?: string;
   agentOnline: boolean;
+  connectAddress?: string;
+  createdAt: string;
 };
 
 export class ApiError extends Error {
@@ -149,3 +151,21 @@ export function parseSize(value: string | undefined): number {
   const units: Record<string, number> = { "": 1, K: 1 << 10, M: 1 << 20, G: 1 << 30, T: 2 ** 40 };
   return Number(m[1]) * units[m[2].toUpperCase()];
 }
+
+export type Schedule = {
+  id: string;
+  instanceId: string;
+  name: string;
+  action: "restart" | "stop" | "start" | "backup" | "command";
+  cron: string;
+  command?: string;
+  keep?: number;
+  warn: boolean;
+  enabled: boolean;
+  lastRun?: string;
+  lastResult?: string;
+  nextRun?: string;
+};
+
+export type PanelSettings = { publicAddress: string; lanAddress: string };
+export type SettingsResponse = { settings: PanelSettings; timeZone: string };

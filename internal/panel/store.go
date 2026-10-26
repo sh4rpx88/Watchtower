@@ -20,6 +20,9 @@ type Instance struct {
 	State      string            `json:"state"`
 	Error      string            `json:"error,omitempty"`
 	CreatedAt  time.Time         `json:"createdAt"`
+	// ConnectAddress is what players type to join, when it isn't the panel's
+	// public address and the game port (for example a playit.gg address).
+	ConnectAddress string `json:"connectAddress,omitempty"`
 }
 
 // store keeps instances in a JSON file. It will move to SQLite once there is

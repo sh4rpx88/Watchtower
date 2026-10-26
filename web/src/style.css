@@ -315,3 +315,33 @@ form.inline input { flex: 1; min-width: 200px; }
 @media (max-width: 700px) and (display-mode: standalone) {
   .banner img { height: 76px; }
 }
+
+/* Server details */
+.details { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 22px; margin: 0; border-top: 1px solid var(--line-soft); padding-top: 14px; }
+.details div { min-width: 0; }
+.details dt { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 3px; }
+.details dd { margin: 0; overflow-wrap: anywhere; }
+code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 0.9em; }
+.address { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+.address code { color: #e9e2db; background: #0d0c0d; border: 1px solid var(--line); border-radius: 3px; padding: 2px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button.copy { padding: 4px 6px; min-height: 0; }
+.server-info .address { font-size: 0.85rem; }
+.section-title { margin: 18px 0 2px; color: #bfb7b0; }
+.activity-icon.blue { color: var(--blue); }
+
+/* Schedules */
+.schedules table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+.schedules td { padding: 10px 6px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+.schedules tr.off td:not(.actions) { opacity: 0.55; }
+.schedule-form { background: #0d0c0d; border: 1px solid var(--line); border-radius: 3px; padding: 16px; margin: 12px 0; }
+.schedule-form .actions { margin-top: 4px; }
+@media (max-width: 700px) {
+  .schedules table, .schedules tbody, .schedules tr, .schedules td { display: block; }
+  .schedules tr { border-bottom: 1px solid var(--line); padding: 8px 0; }
+  .schedules td { border: none; padding: 4px 0; }
+  .schedules td.actions { text-align: left; }
+  .schedules td.actions > * { margin: 4px 6px 0 0; }
+}
+@media (min-width: 901px) and (max-width: 1500px) {
+  .topnav button, .topnav .who { padding: 16px 13px; gap: 8px; letter-spacing: 0.06em; }
+}
