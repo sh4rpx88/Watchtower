@@ -17,21 +17,26 @@ sudo tailscale up            # opens a login link; sign in with your account
 In the [Tailscale admin console](https://login.tailscale.com/admin/dns), turn on **MagicDNS** and **HTTPS
 Certificates** (both on the DNS page).
 
-Then serve the panel over HTTPS on your tailnet:
+Then serve the panel over HTTPS on your tailnet. Port 8443 keeps clear of anything else on the machine that already
+uses 443, such as Nginx Proxy Manager or another reverse proxy:
 
 ```sh
-sudo tailscale serve --bg 8080
+sudo tailscale serve --bg --https=8443 8080
+sudo tailscale serve status    # shows the address
 ```
 
 Tailscale adds its own network interface (a `100.x.y.z` address) beside your normal one, so it doesn't take over or
-move any ports other apps on the machine already use. `tailscale serve` only listens on port 443 of that Tailscale
-address. It prints an address like `https://gaia.your-tailnet.ts.net`. That's your panel from anywhere your devices are signed
+move any ports other apps on the machine already use. Your panel is at an address like
+`https://gaia.your-tailnet.ts.net:8443`; keep the `https://` and the `:8443`, or you'll reach whatever else answers on
+the normal web ports.
+
+If you previously ran `tailscale serve` on another port, clear it first with `sudo tailscale serve reset`. That's your panel from anywhere your devices are signed
 in to Tailscale. On your home network, `http://<gaia's IP>:8080` keeps working as before.
 
 ## 2. Install it on your phone
 
 1. Install the Tailscale app and sign in with the same account.
-2. Open the `https://….ts.net` address.
+2. Open the `https://….ts.net:8443` address.
    - **iPhone (Safari):** tap Share, then **Add to Home Screen**.
    - **Android (Chrome):** tap the menu, then **Install app** (or **Add to Home screen**).
 3. Open Watchtower from the new icon and log in.
@@ -50,18 +55,18 @@ Tailscale.
 
 **Limit them to the panel.** Tailscale's default rules let anyone you share Gaia with reach every port on it, which
 includes anything else Gaia runs (such as media apps or download clients). To allow shared users only the Watchtower
-address (port 443, used by `tailscale serve`), replace the policy on the admin console's **Access controls** page with:
+address (port 8443, from `tailscale serve` above), replace the policy on the admin console's **Access controls** page with:
 
 ```json
 {
   "grants": [
     { "src": ["autogroup:member"], "dst": ["*"], "ip": ["*"] },
-    { "src": ["autogroup:shared"], "dst": ["*"], "ip": ["443"] }
+    { "src": ["autogroup:shared"], "dst": ["*"], "ip": ["8443"] }
   ]
 }
 ```
 
 The first line keeps full access for you and your own devices; the second limits everyone you've shared with to port
-443 on the machines you shared. See Tailscale's [sharing guide](https://tailscale.com/docs/features/sharing) for more.
+8443 on the machines you shared. See Tailscale's [sharing guide](https://tailscale.com/docs/features/sharing) for more.
 
 Playing on the game servers doesn't need Tailscale; players still connect through the game ports as usual.
