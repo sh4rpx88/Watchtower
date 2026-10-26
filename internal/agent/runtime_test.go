@@ -43,11 +43,35 @@ func TestDockerRunArgsZomboid(t *testing.T) {
 		"-e HOME=/server",
 		"-p 17261:16261/udp",
 		"-p 16262:16262/udp",
-		"debian:12-slim sh -c exec ./start-server.sh -servername 'servertest' -adminpassword 'secret'",
+		"debian:12-slim sh -c exec sh ./watchtower-start.sh -servername 'servertest' -adminpassword 'secret'",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)
 		}
+	}
+}
+
+func TestZomboidMemoryAndBranch(t *testing.T) {
+	tpl := loadTemplate(t, "project-zomboid")
+	spec := protocol.InstanceSpec{ID: "abcdef0123456789", Template: tpl,
+		Settings: tpl.Settings(map[string]string{"adminpassword": "x", "memory": "12g", "branch": "legacy41"})}
+	if err := tpl.Validate(spec.Settings); err != nil {
+		t.Fatal(err)
+	}
+	if err := tpl.Validate(tpl.Settings(map[string]string{"adminpassword": "x", "memory": "12g; rm -rf /"})); err == nil {
+		t.Error("memory outside the choices was accepted")
+	}
+	dir := t.TempDir()
+	if err := writeFiles(spec, dir, spec.Settings); err != nil {
+		t.Fatal(err)
+	}
+	script, _ := os.ReadFile(filepath.Join(dir, "watchtower-start.sh"))
+	if !strings.Contains(string(script), "-Xmx12g/' ProjectZomboid64.json") {
+		t.Errorf("start script:\n%s", script)
+	}
+	args, err := steamcmdArgs(spec, dir)
+	if err != nil || steamBeta(args) != "legacy41" {
+		t.Errorf("steamcmd args %v, %v", args, err)
 	}
 }
 
@@ -137,7 +161,7 @@ func TestStartCommandQuotesSettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `exec ./start-server.sh -servername 'servertest' -adminpassword 'it'\''s a secret; rm -rf /'`
+	want := `exec sh ./watchtower-start.sh -servername 'servertest' -adminpassword 'it'\''s a secret; rm -rf /'`
 	if got := args[len(args)-1]; got != want {
 		t.Fatalf("got  %s\nwant %s", got, want)
 	}

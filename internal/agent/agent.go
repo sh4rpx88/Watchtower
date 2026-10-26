@@ -169,6 +169,15 @@ func dispatch(mgr *Manager, in protocol.Envelope) (any, error) {
 			return nil, err
 		}
 		return nil, mgr.CreateBackup(req.InstanceSpec, req.Keep)
+	case protocol.TypeGameConfigRead, protocol.TypeGameConfigWrite:
+		req, err := decode[protocol.GameConfigRequest](in.Payload)
+		if err != nil {
+			return nil, err
+		}
+		if in.Type == protocol.TypeGameConfigRead {
+			return mgr.ReadGameConfig(req.InstanceSpec)
+		}
+		return nil, mgr.WriteGameConfig(req)
 	case protocol.TypeStop, protocol.TypeDelete, protocol.TypeBackupList:
 		ref, err := decode[protocol.InstanceRef](in.Payload)
 		if err != nil {

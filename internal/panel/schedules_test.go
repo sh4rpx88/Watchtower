@@ -145,3 +145,24 @@ func TestHumanDuration(t *testing.T) {
 		}
 	}
 }
+
+func TestGameConfigAPI(t *testing.T) {
+	c, done := setup(t)
+	defer done()
+	var in instanceView
+	c.do("POST", "/api/v1/instances", map[string]any{
+		"name": "Zomboid", "templateId": "project-zomboid", "agent": "local", "settings": map[string]string{"adminpassword": "pw"},
+	}, http.StatusCreated, &in)
+	c.do("POST", "/api/v1/instances/"+in.ID+"/install", nil, http.StatusOK, nil)
+	c.waitState(in.ID, protocol.StateStopped)
+
+	var files []protocol.GameConfigFile
+	c.do("GET", "/api/v1/instances/"+in.ID+"/game-config", nil, http.StatusOK, &files)
+	if len(files) != 2 || files[0].Path != "Zomboid/Server/servertest.ini" || files[1].Label != "Sandbox" || files[0].Exists {
+		t.Fatalf("files = %+v", files)
+	}
+	// The game hasn't made the files yet, so there is nothing to change.
+	c.do("PUT", "/api/v1/instances/"+in.ID+"/game-config/0", map[string]any{"values": map[string]string{"PVP": "false"}}, http.StatusConflict, nil)
+	c.do("PUT", "/api/v1/instances/"+in.ID+"/game-config/9", map[string]any{"values": map[string]string{"PVP": "false"}}, http.StatusNotFound, nil)
+	c.do("PUT", "/api/v1/instances/"+in.ID+"/game-config/0", map[string]any{}, http.StatusBadRequest, nil)
+}

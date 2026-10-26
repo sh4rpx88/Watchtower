@@ -48,6 +48,7 @@ import {
 import { Account, ActivityItem, ActivityLog, UserList } from "./People";
 import Backups from "./Backups";
 import Schedules from "./Schedules";
+import GameSettings from "./GameSettings";
 import Files from "./Files";
 import Integrations from "./Integrations";
 
@@ -891,6 +892,7 @@ function SettingsFields({
             <label key={f.key} className="check">
               <input type="checkbox" checked={value === "true"} onChange={(e) => set(f.key, String(e.target.checked))} />
               {f.label}
+              {f.help && <span className="help">{f.help}</span>}
             </label>
           );
         }
@@ -898,7 +900,15 @@ function SettingsFields({
           <label key={f.key}>
             {f.label}
             {f.required && " *"}
-            {f.type === "select" && f.options ? (
+            {f.type === "select" && f.choices ? (
+              <select value={value} onChange={(e) => set(f.key, e.target.value)}>
+                {f.choices.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            ) : f.type === "select" && f.options ? (
               <select value={value} onChange={(e) => set(f.key, e.target.value)}>
                 {f.options.map((o) => (
                   <option key={o}>{o}</option>
@@ -907,6 +917,7 @@ function SettingsFields({
             ) : (
               <input type={f.type === "int" ? "number" : "text"} value={value} onChange={(e) => set(f.key, e.target.value)} />
             )}
+            {f.help && <span className="help">{f.help}</span>}
           </label>
         );
       })}
@@ -1221,8 +1232,9 @@ function ServerView({
           {tab === "settings" && template && perms.manage && (
             <>
               <ServerDetailsForm key={`d-${instance.id}`} token={token} instance={instance} onSaved={onChanged} />
-              <h3 className="section-title">Game settings</h3>
+              <h3 className="section-title">{template.gameConfig?.length ? "Setup" : "Game settings"}</h3>
               <ServerSettings key={instance.id} token={token} instance={instance} template={template} onSaved={onChanged} />
+              {template.gameConfig?.length ? <GameSettings key={`g-${instance.id}`} token={token} instance={instance} /> : null}
             </>
           )}
           {tab === "schedules" && perms.manage && <Schedules token={token} instance={instance} timeZone={timeZone} />}

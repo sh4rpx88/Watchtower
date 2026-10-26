@@ -32,6 +32,9 @@ const (
 	TypeBackupDelete  = "backup.delete"  // payload: BackupRequest
 	TypeResponse      = "response"       // agent -> panel, payload: Response
 
+	TypeGameConfigRead  = "gameconfig.read"  // payload: GameConfigRequest; response data: []GameConfigFile
+	TypeGameConfigWrite = "gameconfig.write" // payload: GameConfigRequest with File and Values
+
 	// Events from the agent.
 	TypeStatus     = "instance.status"    // payload: Status
 	TypeConsole    = "console.line"       // payload: ConsoleLine
@@ -149,6 +152,42 @@ type BackupResult struct {
 type BackupRequest struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
+}
+
+// GameConfigRequest reads the template's game config files, or with Values
+// changes settings in the one at index File.
+type GameConfigRequest struct {
+	InstanceSpec
+	File   int               `json:"file"`
+	Values map[string]string `json:"values,omitempty"`
+}
+
+// GameConfigFile is one game config file as the editor shows it.
+type GameConfigFile struct {
+	Label    string            `json:"label"`
+	Path     string            `json:"path"`
+	Help     string            `json:"help,omitempty"`
+	Exists   bool              `json:"exists"`
+	Sections []GameConfigGroup `json:"sections"`
+}
+
+type GameConfigGroup struct {
+	Name     string        `json:"name"`
+	Settings []GameSetting `json:"settings"`
+}
+
+// GameSetting is one option read from a game config file. Key is dotted for
+// settings inside lua tables, such as ZombieLore.Speed.
+type GameSetting struct {
+	Key         string             `json:"key"`
+	Value       string             `json:"value"`
+	Type        string             `json:"type"` // bool, int, number, string, or select
+	Description string             `json:"description,omitempty"`
+	Default     string             `json:"default,omitempty"`
+	Min         *float64           `json:"min,omitempty"`
+	Max         *float64           `json:"max,omitempty"`
+	Choices     []templates.Choice `json:"choices,omitempty"`
+	Locked      string             `json:"locked,omitempty"` // why it can't be changed here
 }
 
 type Status struct {

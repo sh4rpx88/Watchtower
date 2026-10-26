@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"strconv"
 
 	"github.com/sh4rpx88/Watchtower/internal/protocol"
 )
@@ -132,4 +133,47 @@ func (s *Server) handleDeleteBackup(w http.ResponseWriter, r *http.Request) {
 	if in, a, ok := s.instanceAgent(w, r); ok {
 		relay(w, r, a, protocol.TypeBackupDelete, protocol.BackupRequest{ID: in.ID, Name: r.PathValue("name")})
 	}
+}
+
+// handleGameConfig returns the game's own settings files, read option by
+// option, for templates that list them.
+func (s *Server) handleGameConfig(w http.ResponseWriter, r *http.Request) {
+	in, a, ok := s.instanceAgent(w, r)
+	if !ok {
+		return
+	}
+	spec, err := s.spec(in)
+	if err != nil {
+		writeError(w, http.StatusConflict, err.Error())
+		return
+	}
+	relay(w, r, a, protocol.TypeGameConfigRead, protocol.GameConfigRequest{InstanceSpec: spec})
+}
+
+// handleUpdateGameConfig changes settings in one game settings file:
+// {"values": {"PVP": "false", "ZombieLore.Speed": "1"}}.
+func (s *Server) handleUpdateGameConfig(w http.ResponseWriter, r *http.Request) {
+	in, a, ok := s.instanceAgent(w, r)
+	if !ok {
+		return
+	}
+	spec, err := s.spec(in)
+	if err != nil {
+		writeError(w, http.StatusConflict, err.Error())
+		return
+	}
+	index, err := strconv.Atoi(r.PathValue("file"))
+	if err != nil || index < 0 || index >= len(spec.Template.GameConfig) {
+		writeError(w, http.StatusNotFound, "no such settings file")
+		return
+	}
+	var body struct {
+		Values map[string]string `json:"values"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.Values) == 0 {
+		writeError(w, http.StatusBadRequest, "send the settings to change as {\"values\": {...}}")
+		return
+	}
+	noteFor(r).text = fmt.Sprintf("%s, %d setting(s)", spec.Template.GameConfig[index].Label, len(body.Values))
+	relay(w, r, a, protocol.TypeGameConfigWrite, protocol.GameConfigRequest{InstanceSpec: spec, File: index, Values: body.Values})
 }

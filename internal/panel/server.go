@@ -125,6 +125,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/v1/instances/{id}/schedules/{scheduleId}", manage(logged("changed the schedule {note}", s.handleUpdateSchedule)))
 	mux.HandleFunc("DELETE /api/v1/instances/{id}/schedules/{scheduleId}", manage(logged("removed the schedule {note}", s.handleDeleteSchedule)))
 	mux.HandleFunc("POST /api/v1/instances/{id}/schedules/{scheduleId}/run", manage(s.handleRunSchedule))
+	mux.HandleFunc("GET /api/v1/instances/{id}/game-config", manage(s.handleGameConfig))
+	mux.HandleFunc("PUT /api/v1/instances/{id}/game-config/{file}", manage(logged("changed the game settings: {note}", s.handleUpdateGameConfig)))
 	mux.HandleFunc("GET /api/v1/instances/{id}/files", manage(s.handleListFiles))
 	mux.HandleFunc("DELETE /api/v1/instances/{id}/files", manage(logged("deleted {path}", s.handleDeleteFile)))
 	mux.HandleFunc("POST /api/v1/instances/{id}/files/mkdir", manage(logged("made the folder {path}", s.handleMkdir)))
