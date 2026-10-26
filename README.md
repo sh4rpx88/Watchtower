@@ -31,6 +31,8 @@ Under **Settings**, put the address friends use (your public IP or a DNS name) s
 Each server's **Schedules** tab can restart, back up or run a command on a timetable; set `TZ` in `.env` so times match yours.
 For Project Zomboid, pick Build 42, unstable or Build 41 under the server's **Settings**, then Install. After the first
 start the Settings tab lists every server and sandbox option from the game's own files.
+Under **Integrations**, the Discord bot keeps a live status board in a channel, with buttons to start, stop, restart
+and back up servers for members with a role you choose; the page walks you through creating the bot.
 Remember to open the game ports (for example 25565/tcp for Minecraft, 16261-16262/udp for Project Zomboid) on your router or firewall.
 
 ## Develop
@@ -51,6 +53,6 @@ The web UI's artwork lives in `web/public/art/`. Game pictures are picked by tem
 2. First games end to end: install, start, stop, live console *(done)*
 3. Daily use: config editor, file manager, backups, stats API with tokens and webhooks *(done)*
 4. Users: accounts with roles and an activity log *(done)*; per-server access later
-5. Scale out: scheduler *(done)*, remote agents, auto-updates, Discord bot
+5. Scale out: scheduler and Discord bot *(done)*, remote agents, auto-updates
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) to help. Licensed under MIT.

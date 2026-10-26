@@ -30,6 +30,9 @@ type Config struct {
 	WebDir        string // built web UI, served at /
 	DataDir       string // where the panel keeps its state; empty keeps it in memory
 	Templates     []templates.Template
+
+	DiscordAPI     string // Discord REST and gateway addresses; empty uses the real ones (tests point them elsewhere)
+	DiscordGateway string
 }
 
 type Server struct {
@@ -42,7 +45,9 @@ type Server struct {
 	users        *jsonList[User]
 	schedules    *jsonList[Schedule]
 	sched        scheduler
-	settings     *jsonList[PanelSettings] // holds at most one entry
+	settings     *jsonList[PanelSettings]   // holds at most one entry
+	discord      *jsonList[DiscordSettings] // holds at most one entry
+	bot          *discordBot
 	events       chan Event
 	activity     *activity
 
@@ -76,12 +81,17 @@ func New(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	discordSettings, err := openJSONList[DiscordSettings](cfg.DataDir, "discord.json")
+	if err != nil {
+		return nil, err
+	}
 	act, err := openActivity(cfg.DataDir)
 	if err != nil {
 		return nil, err
 	}
 	s := &Server{cfg: cfg, store: st, consoles: newConsoles(), statsTracker: newStatsTracker(),
 		tokens: tokens, webhooks: webhooks, events: make(chan Event, 256), activity: act, users: users, schedules: schedules, settings: settings,
+		discord: discordSettings, bot: &discordBot{},
 		sched:  scheduler{running: map[string]context.CancelFunc{}},
 		agents: map[string]*agentConn{}, sessions: map[string]session{}}
 	if err := s.ensureAdmin(); err != nil {
@@ -89,6 +99,7 @@ func New(cfg Config) (*Server, error) {
 	}
 	go s.deliverEvents(context.Background())
 	s.startSchedules()
+	s.startDiscord()
 	return s, nil
 }
 
@@ -140,6 +151,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/instances", admin(logged("created the server", s.handleCreateInstance)))
 	mux.HandleFunc("DELETE /api/v1/instances/{id}", admin(logged("deleted the server", s.handleDeleteInstance)))
 	mux.HandleFunc("PUT /api/v1/settings", admin(logged("changed the panel settings", s.handleUpdateSettingsPanel)))
+	mux.HandleFunc("GET /api/v1/discord", admin(s.handleGetDiscord))
+	mux.HandleFunc("PUT /api/v1/discord", admin(logged("changed the Discord bot settings", s.handleUpdateDiscord)))
+	mux.HandleFunc("POST /api/v1/discord/board", admin(logged("posted a new Discord status board", s.handlePostBoard)))
 	mux.HandleFunc("GET /api/v1/users", admin(s.handleListUsers))
 	mux.HandleFunc("POST /api/v1/users", admin(s.handleCreateUser))
 	mux.HandleFunc("PATCH /api/v1/users/{userId}", admin(s.handleUpdateUser))
