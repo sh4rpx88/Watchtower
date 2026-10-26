@@ -268,3 +268,50 @@ form.inline input { flex: 1; min-width: 200px; }
 .activity .panel-head select { width: auto; }
 .roles { margin: 0 0 8px; padding-left: 18px; line-height: 1.7; }
 .roles b { color: var(--text); font-weight: 600; }
+
+.account-links { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 18px; }
+
+/* Phones: a tab bar at the bottom, like an app. Room is left for the iPhone
+   home indicator and, when installed, the status bar over the banner. */
+@media (max-width: 700px) {
+  body { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  .banner { padding-top: env(safe-area-inset-top); }
+  .banner img { height: 92px; object-position: 22% 45%; }
+  .topnav {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+    flex-wrap: nowrap; gap: 0; padding: 0 0 env(safe-area-inset-bottom);
+    border-top: 1px solid var(--line); border-bottom: none;
+    background: linear-gradient(#171315, #0b090a);
+    box-shadow: 0 -6px 18px #000a;
+  }
+  .topnav .spacer, .topnav .desktop-only, .topnav .role { display: none; }
+  .topnav button, .topnav button.who {
+    flex: 1 1 0; min-width: 0; flex-direction: column; gap: 3px;
+    padding: 9px 2px 7px; border-right: none;
+    font-size: 0.6rem; letter-spacing: 0.04em;
+    font-family: var(--serif); text-transform: uppercase;
+  }
+  .topnav button svg { width: 22px; height: 22px; }
+  .topnav button.active { box-shadow: inset 0 2px 0 var(--red-bright); background: linear-gradient(#2a0c0f, #150709); }
+  .who-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .layout, .layout:not(:has(.rightcol)) { padding: 12px 12px 16px; gap: 12px; }
+  .card { padding: 14px; margin-bottom: 12px; }
+  h2 { font-size: 1.2rem; }
+  .tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .tabs button { white-space: nowrap; padding: 10px 10px; }
+  .console pre { height: 52vh; font-size: 12px; }
+  .hero-actions button { flex: 1 1 calc(50% - 8px); }
+  .hero-thumb { max-height: 120px; }
+  .server-row .row-actions button.icon { flex: 1; }
+  .server-row .row-actions { width: 100%; }
+  button, input, select { min-height: 40px; }
+  button.link { min-height: 0; }
+  .files td, .backups td, .integration td { padding: 8px 4px; }
+  td.actions { white-space: normal; }
+  td.actions > * { margin: 2px 0 2px 6px; }
+  .statcard-value { font-size: 1.6rem; }
+  .login { margin: 24px 16px; }
+}
+@media (max-width: 700px) and (display-mode: standalone) {
+  .banner img { height: 76px; }
+}

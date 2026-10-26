@@ -217,13 +217,14 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
     />
   );
 
-  const nav: [Page, string, ReactNode, boolean][] = [
+  // On phones the nav becomes a tab bar; admin pages move to the account page.
+  const nav: [Page, string, ReactNode, boolean, boolean?][] = [
     ["overview", "Dashboard", <LayoutDashboard size={18} key="i" />, true],
     ["servers", "Servers", <ServerIcon size={18} key="i" />, true],
     ["machines", "Machines", <Boxes size={18} key="i" />, true],
     ["activity", "Activity", <ScrollText size={18} key="i" />, true],
-    ["integrations", "Integrations", <Plug size={18} key="i" />, perms.admin],
-    ["users", "Users", <UserCog size={18} key="i" />, perms.admin],
+    ["integrations", "Integrations", <Plug size={18} key="i" />, perms.admin, true],
+    ["users", "Users", <UserCog size={18} key="i" />, perms.admin, true],
   ];
 
   return (
@@ -233,18 +234,22 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
         <nav className="topnav">
           {nav
             .filter(([, , , shown]) => shown)
-            .map(([page, label, icon]) => (
-              <button key={page} className={top === page ? "active" : ""} onClick={() => setView({ page })}>
+            .map(([page, label, icon, , adminPage]) => (
+              <button
+                key={page}
+                className={[top === page && "active", adminPage && "desktop-only"].filter(Boolean).join(" ")}
+                onClick={() => setView({ page })}
+              >
                 {icon}
                 {label}
               </button>
             ))}
           <span className="spacer" />
           <button className={top === "account" ? "active who" : "who"} onClick={() => setView({ page: "account" })} title="Your account">
-            <Users size={18} /> {me?.name}
+            <Users size={18} /> <span className="who-name">{me?.name}</span>
             {me && <span className="role">{me.role}</span>}
           </button>
-          <button onClick={onLogout} title="Log out">
+          <button className="desktop-only" onClick={onLogout} title="Log out">
             <LogOut size={18} />
             <span className="hide-sm">Log out</span>
           </button>
@@ -296,7 +301,9 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
             {view.page === "activity" && <ActivityLog token={token} instances={instances} onOpen={openServer} />}
             {view.page === "integrations" && perms.admin && <Integrations token={token} />}
             {view.page === "users" && perms.admin && me && <UserList token={token} me={me} />}
-            {view.page === "account" && me && <Account token={token} me={me} />}
+            {view.page === "account" && me && (
+              <Account token={token} me={me} onLogout={onLogout} onOpen={perms.admin ? (page) => setView({ page }) : undefined} />
+            )}
             {view.page === "server" &&
               (current ? (
                 <ServerView

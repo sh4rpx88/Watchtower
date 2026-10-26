@@ -1,5 +1,5 @@
 import { FormEvent, ReactNode, useCallback, useEffect, useState } from "react";
-import { Activity, AlertTriangle, Play, Square, UserMinus, UserPlus } from "lucide-react";
+import { Activity, AlertTriangle, LogOut, Play, Plug, Square, UserCog, UserMinus, UserPlus } from "lucide-react";
 import { ActivityEvent, Instance, Me, Role, User, api } from "./api";
 
 function timeOf(iso: string) {
@@ -199,7 +199,17 @@ export function UserList({ token, me }: { token: string; me: Me }) {
   );
 }
 
-export function Account({ token, me }: { token: string; me: Me }) {
+export function Account({
+  token,
+  me,
+  onLogout,
+  onOpen,
+}: {
+  token: string;
+  me: Me;
+  onLogout: () => void;
+  onOpen?: (page: "users" | "integrations") => void; // admins only
+}) {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirmNext, setConfirmNext] = useState("");
@@ -233,6 +243,21 @@ export function Account({ token, me }: { token: string; me: Me }) {
       <p>
         Logged in as <strong>{me.name}</strong> ({me.role}).
       </p>
+      <div className="account-links">
+        {onOpen && (
+          <>
+            <button onClick={() => onOpen("users")}>
+              <UserCog size={16} /> Users
+            </button>
+            <button onClick={() => onOpen("integrations")}>
+              <Plug size={16} /> Integrations
+            </button>
+          </>
+        )}
+        <button onClick={onLogout}>
+          <LogOut size={16} /> Log out
+        </button>
+      </div>
       <form className="create" onSubmit={save}>
         <h3>Change password</h3>
         <input

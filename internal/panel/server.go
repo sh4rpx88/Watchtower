@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"log/slog"
+	"mime"
 	"net/http"
 	"strings"
 	"sync"
@@ -17,6 +18,11 @@ import (
 )
 
 const Version = "0.2.0-dev"
+
+func init() {
+	// Phones only install the app when its manifest has this type.
+	mime.AddExtensionType(".webmanifest", "application/manifest+json")
+}
 
 type Config struct {
 	AdminPassword string // password for the first admin user, created when there are no users

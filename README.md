@@ -26,6 +26,7 @@ Then open http://localhost:8080 and log in as `admin` with the password from `.e
 people as viewers, operators or admins. Click **Add server**, pick a game, and press **Install**, then **Start**.
 Game servers run as their own containers named `watchtower-<id>` and keep running if the agent restarts.
 Server files live in `/srv/watchtower/instances/` and backups in `/srv/watchtower/backups/`; keep an eye on disk space.
+To use it from your phone or away from home, see [docs/remote-access.md](docs/remote-access.md).
 Remember to open the game ports (for example 25565/tcp for Minecraft, 16261-16262/udp for Project Zomboid) on your router or firewall.
 
 ## Develop
