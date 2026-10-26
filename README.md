@@ -29,6 +29,8 @@ Server files live in `/srv/watchtower/instances/` and backups in `/srv/watchtowe
 To use it from your phone or away from home, see [docs/remote-access.md](docs/remote-access.md).
 Under **Settings**, put the address friends use (your public IP or a DNS name) so every server shows what to type to join.
 Each server's **Schedules** tab can restart, back up or run a command on a timetable; set `TZ` in `.env` so times match yours.
+For Project Zomboid, pick Build 42, unstable or Build 41 under the server's **Settings**, then Install. After the first
+start the Settings tab lists every server and sandbox option from the game's own files.
 Remember to open the game ports (for example 25565/tcp for Minecraft, 16261-16262/udp for Project Zomboid) on your router or firewall.
 
 ## Develop

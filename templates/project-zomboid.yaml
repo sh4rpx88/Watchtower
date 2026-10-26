@@ -1,14 +1,21 @@
 id: project-zomboid
 name: Project Zomboid
-description: Project Zomboid dedicated server.
+description: Project Zomboid dedicated server, Build 42 or Build 41.
 image: debian:12-slim
 install:
   method: steamcmd
   steamAppId: 380870
+  steamBeta: "{{.branch}}"
 env:
   # Zomboid keeps saves and settings under $HOME/Zomboid; keep them in the instance folder.
   HOME: /server
-start: ./start-server.sh -servername {{.servername}} -adminpassword {{.adminpassword}}
+files:
+  # Sets the Java memory limit in the game's launcher config before each start.
+  watchtower-start.sh: |
+    #!/bin/sh
+    sed -i 's/-Xmx[0-9]*[kKmMgG]/-Xmx{{.memory}}/' ProjectZomboid64.json
+    exec ./start-server.sh "$@"
+start: sh ./watchtower-start.sh -servername {{.servername}} -adminpassword {{.adminpassword}}
 save: save
 say: 'servermsg "{{.message}}"'
 stop: quit
@@ -16,12 +23,82 @@ ports:
   - { name: game, port: 16261, protocol: udp }
   - { name: direct, port: 16262, protocol: udp }
 config:
-  - { key: servername, label: Save name (letters and digits), type: string, default: servertest }
-  - { key: adminpassword, label: Admin password, type: string, default: "", required: true }
+  - key: branch
+    label: Game version
+    type: select
+    default: public
+    choices:
+      - { value: public, label: "Build 42 (stable)" }
+      - { value: unstable, label: "Unstable (newest Build 42 test builds)" }
+      - { value: legacy41, label: "Build 41 (legacy)" }
+    help: Press Update after changing this. A world played on Build 42 can't go back to Build 41, so make a backup first. Players need the same version.
+  - key: memory
+    label: Memory for the server
+    type: select
+    default: 8g
+    choices:
+      - { value: 4g, label: 4 GB }
+      - { value: 6g, label: 6 GB }
+      - { value: 8g, label: 8 GB }
+      - { value: 12g, label: 12 GB }
+      - { value: 16g, label: 16 GB }
+      - { value: 24g, label: 24 GB }
+      - { value: 32g, label: 32 GB }
+    help: Build 42 wants 8 GB or more; add about 1 GB for every few extra players or big mods.
+  - key: servername
+    label: Save name
+    type: string
+    default: servertest
+    help: Names the world and its settings files. A new name starts a new world; the old one stays in the server's files.
+  - { key: adminpassword, label: Admin password, type: string, default: "", required: true, help: "For the in-game admin account named admin." }
   - { key: PublicName, label: Server name, type: string, default: "My PZ Server", file: "Zomboid/Server/{{.servername}}.ini" }
   - { key: MaxPlayers, label: Max players, type: int, default: "16", file: "Zomboid/Server/{{.servername}}.ini" }
-  - { key: PVP, label: PvP, type: bool, default: "true", file: "Zomboid/Server/{{.servername}}.ini" }
-  - { key: Public, label: Listed publicly, type: bool, default: "false", file: "Zomboid/Server/{{.servername}}.ini" }
+  - { key: Password, label: Join password (optional), type: string, default: "", file: "Zomboid/Server/{{.servername}}.ini" }
+  - { key: Public, label: List in the in-game server browser, type: bool, default: "false", file: "Zomboid/Server/{{.servername}}.ini" }
+gameConfig:
+  - label: Server settings
+    path: "Zomboid/Server/{{.servername}}.ini"
+    format: ini
+    help: Everything in the server's .ini file, read from the installed game version.
+    locked:
+      DefaultPort: Watchtower maps this port. Change the server's port when you create it instead.
+      UDPPort: Watchtower maps this port. Change the server's port when you create it instead.
+    groups:
+      - { name: Joining and listing, match: "^(Public|PublicName|PublicDescription|MaxPlayers|Password|Open|ServerWelcomeMessage|AutoCreateUserInWhiteList|DropOffWhiteListAfterDeath|MaxAccountsPerUser|AllowNonAsciiUsername|DenyLoginOnOverloadedServer|LoginQueue.*|Ping.*|SteamScoreboard|SteamVAC|BanKnownBlockedSteamIDs|AllowCoop)$" }
+      - { name: PvP, match: "^(PVP.*|Safety.*|ShowSafety|PlayerBumpPlayer|War.*)$" }
+      - { name: Players, match: "^(PauseEmpty|SleepAllowed|SleepNeeded|KnockedDownAllowed|SneakModeHideFromOtherPlayers|PlayerRespawnWith.*|FastForwardMultiplier|MinutesPerPage|AllowTradeUI|KickFastPlayers|MapRemotePlayerVisibility|SpawnPoint|SpawnItems|DisplayUserName|ShowFirstAndLastName|MouseOverToSeeDisplayName|HidePlayersBehindYou|UsernameDisguises|AnnounceDeath)$" }
+      - { name: Safehouses, match: "(?i)^(.*safehouse.*)$" }
+      - { name: Factions, match: "^Faction" }
+      - { name: Chat and voice, match: "^(GlobalChat|ChatStreams|Voice.*|BanKickGlobalSound|DisableRadio.*)$" }
+      - { name: Discord, match: "^Discord" }
+      - { name: Mods and map, match: "^(Mods|WorkshopItems|Map|DoLuaChecksum)$" }
+      - { name: Loot and world, match: "(?i)^(.*loot.*|NoFire|AllowDestructionBySledgehammer|Sledgehammer.*|ItemNumbersLimitPerContainer|BloodSplatLifespanDays|TrashDeleteAll|HoursForWorldItemRemoval|WorldItemRemovalList|RemovePlayerCorpsesOnCorpseRemoval|CarEngineAttractionModifier|SpeedLimit)$" }
+      - { name: Saves and backups, match: "^(SaveWorldEveryMinutes|Backups.*|ResetID|ServerPlayerID|PlayerSaveOnDamage|SaveTransactionID)$" }
+      - { name: Logs and anti-cheat, match: "^(ClientCommandFilter|ClientActionLogs|PerkLogs|AntiCheat.*)$" }
+      - { name: Network and performance, match: "(?i)^(DefaultPort|UDPPort|RCON.*|SteamPort.*|UPnP.*|server_browser_announced_ip|UseTCPForMapDownloads|.*Timeout|PhysicsDelay|ZombieUpdate.*)$" }
+  - label: Sandbox
+    path: "Zomboid/Server/{{.servername}}_SandboxVars.lua"
+    format: lua
+    help: The world's sandbox rules, read from the installed game version. Some options only affect parts of the map that haven't loaded yet, or a new world.
+    locked:
+      VERSION: The game sets this file format version.
+    tables:
+      ZombieLore: Zombie behavior
+      ZombieConfig: Zombie population (advanced)
+      MultiplierConfig: Skill XP
+    groups:
+      - { name: Zombies, match: "^(Zombies|Distribution|ZombieVoronoiNoise|ZombieRespawn|ZombieMigrate|ZombieAttractionMultiplier)$" }
+      - { name: Time and start, match: "^(DayLength|Start.*|TimeSinceApo|NightLength|NightDarkness)$" }
+      - { name: Utilities, match: "^(Water.*|Elec.*|Generator.*|AllowExteriorGenerator|LightBulbLifespan)$" }
+      - { name: Loot, match: "(?i)(loot|rarity|ratindex)" }
+      - { name: Character, match: "(?i)^(XpMultiplier.*|StatsDecrease|EndRegen|CharacterFreePoints|Nutrition|InjurySeverity|BoneFracture|AllClothesUnlocked|StarterKit|MultiHitZombies|RearVulnerability|AttackBlockMovements|ClothingDegradation|.*skill.*|.*trait.*)$" }
+      - { name: Food and water, match: "(?i)^(food.*|fridge.*|DaysForRottenFoodRemoval|EnablePoisoning|MaggotSpawn|EnableTaintedWaterText|.*water.*)$" }
+      - { name: Weather and nature, match: "(?i)^(Temperature|Rain|Erosion.*|Farming|Compost.*|NatureAbundance|Plant.*|Max(Fog|RainFx)Intensity|EnableSnowOnGround|.*climate.*|.*fish.*|.*forag.*)$" }
+      - { name: Vehicles, match: "(?i)^(car.*|.*vehicle.*|.*gas.*|traffic.*|LockedCar|PlayerDamageFromCrash|DamageToPlayerFromHitByACar|SirenShutoffHours)$" }
+      - { name: Animals, match: "(?i)animal" }
+      - { name: Events and buildings, match: "(?i)^(Alarm|LockedHouses|Helicopter|MetaEvent|SleepingEvent|.*chance.*|.*story.*|FireSpread|ConstructionBonusPoints)$" }
+      - { name: Maps, match: "(?i)^(AllowMiniMap|AllowWorldMap|MapAllKnown|.*map.*)$" }
+      - { name: Corpses and cleanup, match: "(?i)^(.*corpse.*|BloodLevel|WorldItemRemovalList|HoursForWorldItemRemoval|ItemRemovalListBlacklistToggle)$" }
 stats:
   # Best effort: based on Project Zomboid's ConnectionManager log lines.
   ready: 'SERVER STARTED'

@@ -18,8 +18,33 @@ export type ConfigField = {
   type: "string" | "int" | "bool" | "select";
   default: string;
   options?: string[];
+  choices?: Choice[];
+  help?: string;
   file?: string;
   required?: boolean;
+};
+
+export type Choice = { value: string; label: string };
+
+// A setting read from one of the game's own settings files.
+export type GameSetting = {
+  key: string;
+  value: string;
+  type: "bool" | "int" | "number" | "string" | "select";
+  description?: string;
+  default?: string;
+  min?: number;
+  max?: number;
+  choices?: Choice[];
+  locked?: string;
+};
+
+export type GameConfigFile = {
+  label: string;
+  path: string;
+  help?: string;
+  exists: boolean;
+  sections: { name: string; settings: GameSetting[] }[];
 };
 
 export type Port = { name: string; port: number; protocol: string };
@@ -30,6 +55,7 @@ export type Template = {
   description: string;
   ports: Port[];
   config: ConfigField[];
+  gameConfig?: { label: string; path: string; format: string }[];
 };
 
 export type Instance = {

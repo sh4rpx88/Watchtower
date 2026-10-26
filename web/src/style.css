@@ -345,3 +345,35 @@ button.copy { padding: 4px 6px; min-height: 0; }
 @media (min-width: 901px) and (max-width: 1500px) {
   .topnav button, .topnav .who { padding: 16px 13px; gap: 8px; letter-spacing: 0.06em; }
 }
+
+/* Setup help and game settings */
+.help { color: var(--muted); font-size: 0.82rem; line-height: 1.35; }
+.create label.check { flex-wrap: wrap; }
+.create label.check .help { flex-basis: 100%; padding-left: 26px; }
+.notice { display: flex; gap: 8px; align-items: baseline; background: #1b1416; border: 1px solid #4a2329; border-radius: 3px; padding: 10px 12px; color: #d9cfc8; line-height: 1.45; }
+.game-config { margin: 18px 0 8px; border-top: 1px solid var(--line-soft); padding-top: 8px; }
+.game-config-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 10px; }
+.game-config-head p { margin: 4px 0 0; }
+.search.small { min-width: 240px; }
+.config-section { border: 1px solid var(--line); border-radius: 3px; margin: 8px 0; background: #121011; }
+.config-section summary { display: flex; align-items: center; gap: 10px; padding: 12px 14px; cursor: pointer; list-style: none; font-family: var(--serif); letter-spacing: 0.06em; color: #e2dad3; }
+.config-section summary::-webkit-details-marker { display: none; }
+.config-section summary .chev { transition: transform 0.15s; transform: rotate(-90deg); color: var(--muted); }
+.config-section[open] summary .chev { transform: none; }
+.config-section summary .muted { font-family: system-ui, sans-serif; letter-spacing: 0; font-size: 0.82rem; }
+.config-section .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--red-bright); }
+.config-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; padding: 4px 14px 16px; }
+.setting { display: grid; gap: 6px; align-content: start; padding: 10px; border: 1px solid var(--line-soft); border-radius: 3px; background: #0f0d0e; min-width: 0; }
+.setting.changed { border-color: #7a2a31; box-shadow: inset 2px 0 0 var(--red-bright); }
+.setting.locked { opacity: 0.7; }
+.setting-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.setting-name code { color: var(--muted); font-size: 0.75rem; }
+.setting-desc { margin: 0; color: #a69d97; font-size: 0.84rem; line-height: 1.4; }
+.setting-meta { margin: 0; color: var(--muted); font-size: 0.76rem; display: flex; gap: 4px; align-items: center; }
+.setting label.check { display: flex; gap: 8px; align-items: center; color: #d9cfc8; }
+.save-bar { position: sticky; bottom: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 12px 14px; margin-top: 10px; background: #171315; border: 1px solid #4a2329; border-radius: 3px; box-shadow: 0 -8px 24px #000a; }
+@media (max-width: 700px) {
+  .save-bar { bottom: 64px; }
+  .search.small { min-width: 0; width: 100%; }
+  .config-grid { grid-template-columns: minmax(0, 1fr); padding: 4px 10px 12px; }
+}

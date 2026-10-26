@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -60,13 +61,14 @@ func (d DockerRuntime) Install(ctx context.Context, spec protocol.InstanceSpec, 
 	case "mojang":
 		return d.installMojang(ctx, inst.Version, dir, out)
 	case "steamcmd":
-		cmd := exec.CommandContext(ctx, "docker", "run", "--rm",
-			"--name", containerName(spec.ID)+"-install",
-			"-v", dir+":/server",
-			"steamcmd/steamcmd:latest",
-			"+force_install_dir", "/server", "+login", "anonymous",
-			"+app_update", fmt.Sprint(inst.SteamAppID), "validate", "+quit")
-		return runStreaming(cmd, out)
+		args, err := steamcmdArgs(spec, dir)
+		if err != nil {
+			return err
+		}
+		if beta := steamBeta(args); beta != "" {
+			out("Installing the " + beta + " branch")
+		}
+		return runStreaming(exec.CommandContext(ctx, "docker", args...), out)
 	case "download":
 		name := path.Base(inst.DownloadURL)
 		out("Downloading " + inst.DownloadURL)
@@ -74,6 +76,51 @@ func (d DockerRuntime) Install(ctx context.Context, spec protocol.InstanceSpec, 
 	default:
 		return fmt.Errorf("unknown install method %q", inst.Method)
 	}
+}
+
+var validBranch = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
+
+// steamcmdArgs builds the docker run command line that installs or updates a
+// Steam game, on the template's Steam branch if it names one.
+func steamcmdArgs(spec protocol.InstanceSpec, dir string) ([]string, error) {
+	inst := spec.Template.Install
+	update := []string{"+app_update", fmt.Sprint(inst.SteamAppID)}
+	if inst.SteamBeta != "" {
+		vars, err := templateVars(spec, dir)
+		if err != nil {
+			return nil, err
+		}
+		beta, err := templates.Render(inst.SteamBeta, vars)
+		if err != nil {
+			return nil, fmt.Errorf("steam branch: %w", err)
+		}
+		beta = strings.TrimSpace(beta)
+		switch {
+		case beta == "" || beta == "public":
+			// the default branch needs no flag
+		case !validBranch.MatchString(beta):
+			return nil, fmt.Errorf("%q isn't a valid Steam branch name", beta)
+		default:
+			update = append(update, "-beta", beta)
+		}
+	}
+	args := []string{"run", "--rm",
+		"--name", containerName(spec.ID) + "-install",
+		"-v", dir + ":/server",
+		"steamcmd/steamcmd:latest",
+		"+force_install_dir", "/server", "+login", "anonymous"}
+	args = append(args, update...)
+	return append(args, "validate", "+quit"), nil
+}
+
+// steamBeta returns the branch named in steamcmd arguments, if any.
+func steamBeta(args []string) string {
+	for i, a := range args {
+		if a == "-beta" && i+1 < len(args) {
+			return args[i+1]
+		}
+	}
+	return ""
 }
 
 const mojangManifest = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"

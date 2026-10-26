@@ -34,6 +34,8 @@ session token or an API token (see below),
 | POST | `/instances/{id}/backups` | Start a backup; a running server saves its world first |
 | POST | `/instances/{id}/backups/{name}/restore` | Replace the server's files with a backup (server must be stopped) |
 | DELETE | `/instances/{id}/backups/{name}` | Delete a backup |
+| GET | `/instances/{id}/game-config` | The game's own settings files (see Game settings), read option by option |
+| PUT | `/instances/{id}/game-config/{file}` | `{"values": {"PVP": "false", "ZombieLore.Speed": "1"}}` for the file at that index; server must be stopped |
 | GET | `/instances/{id}/schedules` | The server's schedules, each with `nextRun` |
 | POST | `/instances/{id}/schedules` | Add one (see Schedules) |
 | PUT | `/instances/{id}/schedules/{scheduleId}` | Replace one |
@@ -108,6 +110,16 @@ month, month, day of week) in the panel's time zone, set with `TZ` in `.env`. `w
 1 minute and 10 seconds before a restart or stop, using the template's `say` command. A backup schedule can set `keep`
 to delete all but the newest N backups, and a command schedule sets `command`. A scheduled restart skips a server
 that isn't running. Each run is written to the activity log.
+
+## Game settings
+
+Templates can list settings files the game writes itself under `gameConfig` (for Project Zomboid, the server `.ini`
+and `SandboxVars.lua`). The agent reads every option from the file, using the comment above each one for its
+description, range (`Minimum=0 Maximum=10 Default=1`) and choices (`1 = Insane`), so the editor always matches the
+installed game version. Changes only replace the value on each line. Each setting has `key` (dotted inside lua tables,
+like `ZombieLore.Speed`), `value`, `type` (`bool`, `int`, `number`, `string`, `select`), and optionally `description`,
+`default`, `min`, `max`, `choices` and `locked` (why it can't be changed here). The files exist after the server's
+first start; until then `exists` is false.
 
 ## API tokens
 
