@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -295,6 +296,9 @@ func (s *Server) handleDeleteInstance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.consoles.forget(in.ID)
+	if err := s.removeSchedules(func(sc Schedule) bool { return sc.InstanceID == in.ID }); err != nil {
+		slog.Error("removing schedules of deleted server", "err", err)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

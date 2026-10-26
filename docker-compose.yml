@@ -10,6 +10,8 @@ services:
       PANEL_ADMIN_PASSWORD: ${PANEL_ADMIN_PASSWORD:?set in .env}
       PANEL_AGENT_TOKEN: ${PANEL_AGENT_TOKEN:?set in .env}
       PANEL_DATA_DIR: /data/panel
+      # Schedules run in this time zone, e.g. America/Chicago. Set TZ in .env.
+      TZ: ${TZ:-UTC}
     volumes:
       - ./data:/data
     restart: unless-stopped

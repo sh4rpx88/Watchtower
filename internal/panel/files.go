@@ -119,7 +119,7 @@ func (s *Server) handleCreateBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, err.Error())
 		return
 	}
-	relay(w, r, a, protocol.TypeBackupCreate, spec)
+	relay(w, r, a, protocol.TypeBackupCreate, protocol.BackupCreate{InstanceSpec: spec})
 }
 
 func (s *Server) handleRestoreBackup(w http.ResponseWriter, r *http.Request) {

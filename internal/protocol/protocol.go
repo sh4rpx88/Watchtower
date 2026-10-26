@@ -26,16 +26,17 @@ const (
 	TypeFileDelete = "file.delete" // payload: FileRequest
 	TypeFileMkdir  = "file.mkdir"  // payload: FileRequest
 
-	TypeBackupCreate  = "backup.create"  // payload: InstanceSpec; runs in the background
+	TypeBackupCreate  = "backup.create"  // payload: BackupCreate; runs in the background
 	TypeBackupList    = "backup.list"    // payload: InstanceRef; response data: []BackupInfo
 	TypeBackupRestore = "backup.restore" // payload: BackupRequest
 	TypeBackupDelete  = "backup.delete"  // payload: BackupRequest
 	TypeResponse      = "response"       // agent -> panel, payload: Response
 
 	// Events from the agent.
-	TypeStatus    = "instance.status"    // payload: Status
-	TypeConsole   = "console.line"       // payload: ConsoleLine
-	TypeResources = "instance.resources" // payload: Resources
+	TypeStatus     = "instance.status"    // payload: Status
+	TypeConsole    = "console.line"       // payload: ConsoleLine
+	TypeResources  = "instance.resources" // payload: Resources
+	TypeBackupDone = "backup.done"        // payload: BackupResult, when a backup finishes or fails
 )
 
 // Instance states.
@@ -128,6 +129,21 @@ type BackupInfo struct {
 	Name      string `json:"name"`
 	Size      int64  `json:"size"`
 	CreatedAt int64  `json:"createdAt"` // unix seconds
+}
+
+// BackupCreate starts a backup. With Keep set, older backups beyond the newest
+// Keep are deleted once it succeeds.
+type BackupCreate struct {
+	InstanceSpec
+	Keep int `json:"keep,omitempty"`
+}
+
+type BackupResult struct {
+	ID      string `json:"id"`
+	Name    string `json:"name,omitempty"`
+	Size    int64  `json:"size,omitempty"`
+	Removed int    `json:"removed,omitempty"` // old backups deleted to keep the count
+	Error   string `json:"error,omitempty"`
 }
 
 type BackupRequest struct {

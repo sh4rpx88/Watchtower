@@ -21,6 +21,9 @@ import {
   SquareTerminal,
   Trash2,
   ScrollText,
+  CalendarClock,
+  Copy,
+  Check,
   UserCog,
   Users,
 } from "lucide-react";
@@ -38,10 +41,13 @@ import {
   formatSize,
   login,
   Me,
+  PanelSettings,
+  SettingsResponse,
   parseSize,
 } from "./api";
 import { Account, ActivityItem, ActivityLog, UserList } from "./People";
 import Backups from "./Backups";
+import Schedules from "./Schedules";
 import Files from "./Files";
 import Integrations from "./Integrations";
 
@@ -119,14 +125,15 @@ const stateLabels: Record<string, string> = {
   error: "Error",
 };
 
-type Tab = "console" | "settings" | "files" | "backups";
-type Page = "overview" | "servers" | "machines" | "activity" | "integrations" | "users" | "account";
+type Tab = "console" | "settings" | "schedules" | "files" | "backups";
+type Page = "overview" | "servers" | "machines" | "activity" | "integrations" | "users" | "settings" | "account";
 type View = { page: Page } | { page: "server"; id: string; tab: Tab };
 
 const tabs: { id: Tab; label: string; icon: ReactNode; need: keyof Perms }[] = [
   { id: "console", label: "Console", icon: <SquareTerminal size={16} />, need: "control" },
   { id: "settings", label: "Settings", icon: <Settings size={16} />, need: "manage" },
   { id: "files", label: "File Manager", icon: <FolderOpen size={16} />, need: "manage" },
+  { id: "schedules", label: "Schedules", icon: <CalendarClock size={16} />, need: "manage" },
   { id: "backups", label: "Backups", icon: <Archive size={16} />, need: "manage" },
 ];
 
@@ -134,6 +141,41 @@ const tabs: { id: Tab; label: string; icon: ReactNode; need: keyof Perms }[] = [
 type Perms = { control: boolean; manage: boolean; admin: boolean };
 const PermsContext = createContext<Perms>({ control: false, manage: false, admin: false });
 const usePerms = () => useContext(PermsContext);
+
+// SettingsContext carries the panel settings (public address, time zone).
+const SettingsContext = createContext<SettingsResponse>({ settings: { publicAddress: "", lanAddress: "" }, timeZone: "" });
+
+// connectAddress is what players type to join: the server's own address if
+// set, otherwise the panel's public address with the game port.
+function connectAddress(instance: Instance, settings: PanelSettings) {
+  if (instance.connectAddress) return instance.connectAddress;
+  const port = instance.ports.game ?? Object.values(instance.ports)[0];
+  return settings.publicAddress ? `${settings.publicAddress}${port ? `:${port}` : ""}` : "";
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Clipboard needs HTTPS; fall back to a hidden text box.
+      const el = document.createElement("textarea");
+      el.value = text;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      el.remove();
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+  return (
+    <button className="copy" onClick={copy} title={`Copy ${text}`} type="button">
+      {copied ? <Check size={14} /> : <Copy size={14} />}
+    </button>
+  );
+}
 
 function permsFor(me: Me | null): Perms {
   const role = me?.role;
@@ -157,6 +199,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const [view, setView] = useState<View>({ page: "overview" });
   const [creating, setCreating] = useState(false);
   const [me, setMe] = useState<Me | null>(null);
+  const [panelSettings, setPanelSettings] = useState<SettingsResponse>({ settings: { publicAddress: "", lanAddress: "" }, timeZone: "" });
   const perms = permsFor(me);
 
   useEffect(() => {
@@ -164,6 +207,10 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
       if (err instanceof ApiError && err.status === 401) onLogout();
     });
   }, [token, onLogout]);
+  const loadSettings = useCallback(() => api<SettingsResponse>(token, "GET", "/settings").then(setPanelSettings, () => {}), [token]);
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
 
   const load = useCallback(async () => {
     try {
@@ -225,115 +272,119 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
     ["activity", "Activity", <ScrollText size={18} key="i" />, true],
     ["integrations", "Integrations", <Plug size={18} key="i" />, perms.admin, true],
     ["users", "Users", <UserCog size={18} key="i" />, perms.admin, true],
+    ["settings", "Settings", <Settings size={18} key="i" />, perms.admin, true],
   ];
 
   return (
     <PermsContext.Provider value={perms}>
-      <div className="shell">
-        <Banner />
-        <nav className="topnav">
-          {nav
-            .filter(([, , , shown]) => shown)
-            .map(([page, label, icon, , adminPage]) => (
-              <button
-                key={page}
-                className={[top === page && "active", adminPage && "desktop-only"].filter(Boolean).join(" ")}
-                onClick={() => setView({ page })}
-              >
-                {icon}
-                {label}
-              </button>
-            ))}
-          <span className="spacer" />
-          <button className={top === "account" ? "active who" : "who"} onClick={() => setView({ page: "account" })} title="Your account">
-            <Users size={18} /> <span className="who-name">{me?.name}</span>
-            {me && <span className="role">{me.role}</span>}
-          </button>
-          <button className="desktop-only" onClick={onLogout} title="Log out">
-            <LogOut size={18} />
-            <span className="hide-sm">Log out</span>
-          </button>
-        </nav>
-
-        <div className="layout">
-          <aside className="sidebar card">
-            <h3>Server management</h3>
-            <button className={view.page === "overview" ? "active" : ""} onClick={() => setView({ page: "overview" })}>
-              <LayoutDashboard size={18} /> Overview
-            </button>
-            {instances.map((i) => (
-              <div key={i.id}>
-                <button className={current?.id === i.id ? "active" : ""} onClick={() => openServer(i.id)}>
-                  <span className={`dot ${i.state}`} /> {i.name}
+      <SettingsContext.Provider value={panelSettings}>
+        <div className="shell">
+          <Banner />
+          <nav className="topnav">
+            {nav
+              .filter(([, , , shown]) => shown)
+              .map(([page, label, icon, , adminPage]) => (
+                <button
+                  key={page}
+                  className={[top === page && "active", adminPage && "desktop-only"].filter(Boolean).join(" ")}
+                  onClick={() => setView({ page })}
+                >
+                  {icon}
+                  {label}
                 </button>
-                {current?.id === i.id && view.page === "server" && (
-                  <div className="subnav">
-                    {tabs
-                      .filter((t) => perms[t.need])
-                      .map((t) => (
-                        <button key={t.id} className={view.tab === t.id ? "active" : ""} onClick={() => openServer(i.id, t.id)}>
-                          {t.icon} {t.label}
-                        </button>
-                      ))}
-                  </div>
-                )}
-              </div>
-            ))}
-            {perms.admin && (
-              <button onClick={addServer}>
-                <Plus size={18} /> Add server
-              </button>
-            )}
-            <div className="sidebar-art">
-              <img src="/art/sidebar.jpg" alt="A stronger world together" />
-            </div>
-          </aside>
-
-          <main>
-            {view.page === "overview" && (
-              <>
-                <Totals agents={agents} instances={instances} stats={stats} />
-                {serversPanel}
-              </>
-            )}
-            {view.page === "servers" && serversPanel}
-            {view.page === "machines" && <Machines agents={agents} instances={instances} />}
-            {view.page === "activity" && <ActivityLog token={token} instances={instances} onOpen={openServer} />}
-            {view.page === "integrations" && perms.admin && <Integrations token={token} />}
-            {view.page === "users" && perms.admin && me && <UserList token={token} me={me} />}
-            {view.page === "account" && me && (
-              <Account token={token} me={me} onLogout={onLogout} onOpen={perms.admin ? (page) => setView({ page }) : undefined} />
-            )}
-            {view.page === "server" &&
-              (current ? (
-                <ServerView
-                  token={token}
-                  instance={current}
-                  stats={stats[current.id]}
-                  agent={agents.find((a) => a.name === current.agent)}
-                  template={templates.find((t) => t.id === current.templateId)}
-                  gameName={gameName(current.templateId)}
-                  tab={view.tab}
-                  setTab={(tab) => openServer(current.id, tab)}
-                  onBack={() => setView({ page: "overview" })}
-                  onChanged={load}
-                />
-              ) : (
-                <p className="muted">That server no longer exists.</p>
               ))}
-          </main>
+            <span className="spacer" />
+            <button className={top === "account" ? "active who" : "who"} onClick={() => setView({ page: "account" })} title="Your account">
+              <Users size={18} /> <span className="who-name">{me?.name}</span>
+              {me && <span className="role">{me.role}</span>}
+            </button>
+            <button className="desktop-only" onClick={onLogout} title="Log out">
+              <LogOut size={18} />
+              <span className="hide-sm">Log out</span>
+            </button>
+          </nav>
 
-          {view.page === "overview" && (
-            <aside className="rightcol">
-              <RecentActivity activity={activity} onOpen={openServer} />
-              <SystemStatus agents={agents} instances={instances} />
-              <div className="keep-art card">
-                <img src="/art/keep.jpg" alt="The keep never sleeps" />
+          <div className="layout">
+            <aside className="sidebar card">
+              <h3>Server management</h3>
+              <button className={view.page === "overview" ? "active" : ""} onClick={() => setView({ page: "overview" })}>
+                <LayoutDashboard size={18} /> Overview
+              </button>
+              {instances.map((i) => (
+                <div key={i.id}>
+                  <button className={current?.id === i.id ? "active" : ""} onClick={() => openServer(i.id)}>
+                    <span className={`dot ${i.state}`} /> {i.name}
+                  </button>
+                  {current?.id === i.id && view.page === "server" && (
+                    <div className="subnav">
+                      {tabs
+                        .filter((t) => perms[t.need])
+                        .map((t) => (
+                          <button key={t.id} className={view.tab === t.id ? "active" : ""} onClick={() => openServer(i.id, t.id)}>
+                            {t.icon} {t.label}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+              {perms.admin && (
+                <button onClick={addServer}>
+                  <Plus size={18} /> Add server
+                </button>
+              )}
+              <div className="sidebar-art">
+                <img src="/art/sidebar.jpg" alt="A stronger world together" />
               </div>
             </aside>
-          )}
+
+            <main>
+              {view.page === "overview" && (
+                <>
+                  <Totals agents={agents} instances={instances} stats={stats} />
+                  {serversPanel}
+                </>
+              )}
+              {view.page === "servers" && serversPanel}
+              {view.page === "machines" && <Machines agents={agents} instances={instances} />}
+              {view.page === "activity" && <ActivityLog token={token} instances={instances} onOpen={openServer} />}
+              {view.page === "integrations" && perms.admin && <Integrations token={token} />}
+              {view.page === "users" && perms.admin && me && <UserList token={token} me={me} />}
+              {view.page === "settings" && perms.admin && <PanelSettingsPage token={token} value={panelSettings} onSaved={loadSettings} />}
+              {view.page === "account" && me && (
+                <Account token={token} me={me} onLogout={onLogout} onOpen={perms.admin ? (page) => setView({ page }) : undefined} />
+              )}
+              {view.page === "server" &&
+                (current ? (
+                  <ServerView
+                    token={token}
+                    instance={current}
+                    stats={stats[current.id]}
+                    agent={agents.find((a) => a.name === current.agent)}
+                    template={templates.find((t) => t.id === current.templateId)}
+                    gameName={gameName(current.templateId)}
+                    tab={view.tab}
+                    setTab={(tab) => openServer(current.id, tab)}
+                    onBack={() => setView({ page: "overview" })}
+                    onChanged={load}
+                  />
+                ) : (
+                  <p className="muted">That server no longer exists.</p>
+                ))}
+            </main>
+
+            {view.page === "overview" && (
+              <aside className="rightcol">
+                <RecentActivity activity={activity} onOpen={openServer} />
+                <SystemStatus agents={agents} instances={instances} />
+                <div className="keep-art card">
+                  <img src="/art/keep.jpg" alt="The keep never sleeps" />
+                </div>
+              </aside>
+            )}
+          </div>
         </div>
-      </div>
+      </SettingsContext.Provider>
     </PermsContext.Provider>
   );
 }
@@ -602,6 +653,7 @@ function ServerRow({
           <span className={`dot ${instance.state}`} /> {instance.name}
         </button>
         <div className="muted">{gameName}</div>
+        <RowAddress instance={instance} />
         <div className="server-state">
           <StateLabel instance={instance} stats={stats} />
           {live && stats.uptimeSeconds ? <span className="muted"> ◷ {formatDuration(stats.uptimeSeconds)}</span> : null}
@@ -902,6 +954,180 @@ function ServerSettings({
   );
 }
 
+function RowAddress({ instance }: { instance: Instance }) {
+  const address = connectAddress(instance, useContext(SettingsContext).settings);
+  if (!address) return null;
+  return (
+    <div className="address">
+      <code>{address}</code>
+      <CopyButton text={address} />
+    </div>
+  );
+}
+
+function ServerDetails({ instance, gameName }: { instance: Instance; gameName: string }) {
+  const { settings } = useContext(SettingsContext);
+  const perms = usePerms();
+  const address = connectAddress(instance, settings);
+  const gamePort = instance.ports.game ?? Object.values(instance.ports)[0];
+  const lan = settings.lanAddress ? `${settings.lanAddress}${gamePort ? `:${gamePort}` : ""}` : "";
+  const rows: [string, ReactNode][] = [
+    [
+      "Connect",
+      address ? (
+        <span className="address">
+          <code>{address}</code>
+          <CopyButton text={address} />
+        </span>
+      ) : (
+        <span className="muted">{perms.admin ? "Set your public address under Settings" : "Not set yet"}</span>
+      ),
+    ],
+  ];
+  if (lan)
+    rows.push([
+      "On your network",
+      <span className="address" key="lan">
+        <code>{lan}</code>
+        <CopyButton text={lan} />
+      </span>,
+    ]);
+  rows.push(
+    [
+      "Ports",
+      Object.entries(instance.ports)
+        .map(([name, port]) => `${port} (${name})`)
+        .join(", ") || "—",
+    ],
+    ["Game", gameName],
+    ["Machine", instance.agent + (instance.agentOnline ? "" : " (offline)")],
+    ["Created", new Date(instance.createdAt).toLocaleDateString([], { dateStyle: "medium" })],
+    ["Container", <code key="c">watchtower-{instance.id}</code>],
+  );
+  return (
+    <dl className="details">
+      {rows.map(([k, v]) => (
+        <div key={k}>
+          <dt>{k}</dt>
+          <dd>{v}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function ServerDetailsForm({ token, instance, onSaved }: { token: string; instance: Instance; onSaved: () => void }) {
+  const [name, setName] = useState(instance.name);
+  const [address, setAddress] = useState(instance.connectAddress ?? "");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const { settings } = useContext(SettingsContext);
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    setMessage("");
+    try {
+      await api(token, "PATCH", `/instances/${instance.id}`, { name, connectAddress: address });
+      setMessage("Saved.");
+      onSaved();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  return (
+    <form className="create" onSubmit={save}>
+      <h3 className="section-title">Server details</h3>
+      <label>
+        Name
+        <input value={name} onChange={(e) => setName(e.target.value)} required />
+      </label>
+      <label>
+        Address players connect to (optional)
+        <input
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+          placeholder={connectAddress({ ...instance, connectAddress: "" }, settings) || "e.g. your-name.joinmc.link"}
+        />
+      </label>
+      <p className="muted">
+        Leave it empty to use the panel's public address with this server's port. Fill it in for a tunnel like playit.gg.
+      </p>
+      <button type="submit" className="primary">
+        Save details
+      </button>
+      {message && <p className="muted">{message}</p>}
+      {error && <p className="error">{error}</p>}
+    </form>
+  );
+}
+
+function PanelSettingsPage({ token, value, onSaved }: { token: string; value: SettingsResponse; onSaved: () => void }) {
+  const [settings, setSettings] = useState<PanelSettings>(value.settings);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  useEffect(() => setSettings(value.settings), [value.settings]);
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    setMessage("");
+    try {
+      await api(token, "PUT", "/settings", settings);
+      setMessage("Saved.");
+      onSaved();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  return (
+    <section className="card">
+      <div className="panel-head">
+        <h2>Settings</h2>
+      </div>
+      <form className="create" onSubmit={save}>
+        <h3 className="section-title">Addresses</h3>
+        <label>
+          Public address
+          <input
+            value={settings.publicAddress}
+            onChange={(e) => setSettings({ ...settings, publicAddress: e.target.value })}
+            placeholder="mc.example.com or your public IP"
+          />
+        </label>
+        <p className="muted">
+          What friends outside your home use. Shown on every server with its port, unless a server has its own address. Find your public IP
+          at whatismyip.com; a free dynamic DNS name keeps working if it changes.
+        </p>
+        <label>
+          Home network address
+          <input
+            value={settings.lanAddress}
+            onChange={(e) => setSettings({ ...settings, lanAddress: e.target.value })}
+            placeholder="192.168.1.180"
+          />
+        </label>
+        <p className="muted">The machine's IP on your network, for people playing from home.</p>
+        <button type="submit" className="primary">
+          Save settings
+        </button>
+        {message && <p className="muted">{message}</p>}
+        {error && <p className="error">{error}</p>}
+      </form>
+      <h3 className="section-title">Time zone</h3>
+      <p>
+        Schedules run in <strong>{value.timeZone}</strong>.
+      </p>
+      <p className="muted">
+        To change it, set <code>TZ</code> in your <code>.env</code> file (for example <code>TZ=America/Chicago</code>) and run{" "}
+        <code>docker compose up -d</code>.
+      </p>
+    </section>
+  );
+}
+
 function ServerView({
   token,
   instance,
@@ -925,6 +1151,7 @@ function ServerView({
   onBack: () => void;
   onChanged: () => void;
 }) {
+  const { timeZone } = useContext(SettingsContext);
   const { act, busy, error, canInstall, canStart, canStop, canRestart } = useActions(token, instance, onChanged);
   const perms = usePerms();
   const s = instance.state;
@@ -943,10 +1170,7 @@ function ServerView({
         <div className="server-info">
           <h2>{instance.name}</h2>
           <div className="muted">
-            {gameName} on {instance.agent} · ports{" "}
-            {Object.entries(instance.ports)
-              .map(([k, v]) => `${k} ${v}`)
-              .join(", ")}
+            {gameName} on {instance.agent}
           </div>
           <div className="server-state">
             <StateLabel instance={instance} stats={stats} />
@@ -957,6 +1181,7 @@ function ServerView({
           {error && <div className="error">{error}</div>}
         </div>
         <ServerMeters instance={instance} stats={stats} agent={agent} />
+        <ServerDetails instance={instance} gameName={gameName} />
         {perms.control && (
           <div className="hero-actions">
             <button disabled={busy || !canInstall} onClick={() => act("/install")}>
@@ -994,8 +1219,13 @@ function ServerView({
             <Console token={token} id={instance.id} running={s === "running"} onSend={(line) => act("/command", "POST", { line })} />
           )}
           {tab === "settings" && template && perms.manage && (
-            <ServerSettings key={instance.id} token={token} instance={instance} template={template} onSaved={onChanged} />
+            <>
+              <ServerDetailsForm key={`d-${instance.id}`} token={token} instance={instance} onSaved={onChanged} />
+              <h3 className="section-title">Game settings</h3>
+              <ServerSettings key={instance.id} token={token} instance={instance} template={template} onSaved={onChanged} />
+            </>
           )}
+          {tab === "schedules" && perms.manage && <Schedules token={token} instance={instance} timeZone={timeZone} />}
           {tab === "files" &&
             perms.manage &&
             (installed && instance.agentOnline ? (

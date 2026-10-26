@@ -20,12 +20,15 @@ const (
 	EventServerReady   = "server.ready"
 	EventServerStopped = "server.stopped"
 	EventServerCrashed = "server.crashed"
+	EventBackupDone    = "backup.done"
+	EventBackupFailed  = "backup.failed"
 	// EventAction is something a person or API token did, for the activity
 	// log. Webhooks don't receive these.
 	EventAction = "action"
 )
 
-var eventTypes = []string{EventPlayerJoin, EventPlayerLeave, EventServerReady, EventServerStopped, EventServerCrashed}
+var eventTypes = []string{EventPlayerJoin, EventPlayerLeave, EventServerReady, EventServerStopped, EventServerCrashed,
+	EventBackupDone, EventBackupFailed}
 
 type EventInstance struct {
 	ID   string `json:"id"`
@@ -43,6 +46,8 @@ type Event struct {
 	Error       string        `json:"error,omitempty"`
 	Actor       string        `json:"actor,omitempty"`   // for actions: the username, or "token <name>"
 	Message     string        `json:"message,omitempty"` // for actions: what they did, e.g. "started the server"
+	Backup      string        `json:"backup,omitempty"`  // for backup events: the archive's name
+	Size        int64         `json:"size,omitempty"`    // for backup.done: its size in bytes
 }
 
 // Text is a one-line summary, used for Discord messages.
@@ -63,6 +68,10 @@ func (e Event) Text() string {
 		return fmt.Sprintf("%s stopped", name)
 	case EventServerCrashed:
 		return fmt.Sprintf("%s crashed: %s", name, e.Error)
+	case EventBackupDone:
+		return fmt.Sprintf("%s: backup saved (%.1f MB)", name, float64(e.Size)/(1<<20))
+	case EventBackupFailed:
+		return fmt.Sprintf("%s: backup failed: %s", name, e.Error)
 	case EventAction:
 		if e.Instance.Name == "" {
 			return e.Actor + " " + e.Message

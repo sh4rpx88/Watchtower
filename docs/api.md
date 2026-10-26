@@ -16,6 +16,7 @@ session token or an API token (see below),
 | GET | `/instances` | All servers, with state and whether their machine is online |
 | POST | `/instances` | Create: `{"name", "templateId", "agent", "settings": {...}, "ports": {"game": 25566}}` |
 | GET | `/instances/{id}` | One server |
+| PATCH | `/instances/{id}` | `{"name", "connectAddress"}`; either field can be left out. `connectAddress` overrides the address shown to players |
 | PUT | `/instances/{id}/settings` | Change settings, e.g. `{"motd": "Hi"}`; applies on next start |
 | POST | `/instances/{id}/install` | Install or update the game files |
 | POST | `/instances/{id}/start` | Start |
@@ -33,6 +34,13 @@ session token or an API token (see below),
 | POST | `/instances/{id}/backups` | Start a backup; a running server saves its world first |
 | POST | `/instances/{id}/backups/{name}/restore` | Replace the server's files with a backup (server must be stopped) |
 | DELETE | `/instances/{id}/backups/{name}` | Delete a backup |
+| GET | `/instances/{id}/schedules` | The server's schedules, each with `nextRun` |
+| POST | `/instances/{id}/schedules` | Add one (see Schedules) |
+| PUT | `/instances/{id}/schedules/{scheduleId}` | Replace one |
+| DELETE | `/instances/{id}/schedules/{scheduleId}` | Remove one |
+| POST | `/instances/{id}/schedules/{scheduleId}/run` | Run it now |
+| GET | `/settings` | `{"settings": {"publicAddress", "lanAddress"}, "timeZone"}` |
+| PUT | `/settings` | `{"publicAddress", "lanAddress"}` (admin only) |
 
 Server states: `not_installed`, `installing`, `stopped`, `starting`, `running`, `stopping`, `error`.
 
@@ -89,6 +97,18 @@ restart, console commands, settings, file saves and deletes, new folders, backup
 `GET /agents` reports each machine's `numCpu`, and on Linux also `memoryTotal`, `diskTotal` and `diskFree` in bytes
 (disk is for the filesystem holding the agent's data directory).
 
+## Schedules
+
+```json
+{"name": "Nightly restart", "action": "restart", "cron": "0 4 * * *", "warn": true, "enabled": true}
+```
+
+`action` is `restart`, `stop`, `start`, `backup` or `command`. `cron` is the usual five fields (minute, hour, day of
+month, month, day of week) in the panel's time zone, set with `TZ` in `.env`. `warn` tells players in game 5 minutes,
+1 minute and 10 seconds before a restart or stop, using the template's `say` command. A backup schedule can set `keep`
+to delete all but the newest N backups, and a command schedule sets `command`. A scheduled restart skips a server
+that isn't running. Each run is written to the activity log.
+
 ## API tokens
 
 Create tokens on the dashboard under **Integrations**, or with `POST /tokens {"name", "scope"}` (admin only; the secret
@@ -101,7 +121,7 @@ Scopes are `read` and `control`; see the table under Users and roles.
 ## Webhooks
 
 `POST /webhooks {"name", "url", "format": "discord" | "json", "events": [...]}` (admin only). Events:
-`player.join`, `player.leave`, `server.ready`, `server.stopped`, `server.crashed`.
+`player.join`, `player.leave`, `server.ready`, `server.stopped`, `server.crashed`, `backup.done`, `backup.failed`.
 
 - `discord` posts `{"content": "**Survival**: Steve joined (3/20 online)"}`, so a Discord channel webhook URL works as is.
 - `json` posts the event:

@@ -67,7 +67,7 @@ func TestBackupAndRestore(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "world", "level.dat"), []byte("original"), 0o644)
 	m.instances[testID] = &instance{state: protocol.StateStopped}
 
-	if err := m.CreateBackup(protocol.InstanceSpec{ID: testID}); err != nil {
+	if err := m.CreateBackup(protocol.InstanceSpec{ID: testID}, 0); err != nil {
 		t.Fatal(err)
 	}
 	var backups []protocol.BackupInfo
@@ -101,6 +101,29 @@ func TestBackupAndRestore(t *testing.T) {
 	}
 	if err := m.DeleteBackup(protocol.BackupRequest{ID: testID, Name: backups[0].Name}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestBackupKeepsNewest(t *testing.T) {
+	m := newTestManager(t)
+	os.MkdirAll(m.dir(testID), 0o755)
+	m.instances[testID] = &instance{state: protocol.StateStopped}
+	os.MkdirAll(m.backupDir(testID), 0o755)
+	for _, name := range []string{"20240101-000000.tar.gz", "20240102-000000.tar.gz", "20240103-000000.tar.gz"} {
+		os.WriteFile(filepath.Join(m.backupDir(testID), name), []byte("old"), 0o644)
+	}
+	if err := m.CreateBackup(protocol.InstanceSpec{ID: testID}, 2); err != nil {
+		t.Fatal(err)
+	}
+	var backups []protocol.BackupInfo
+	waitFor(t, func() bool {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		return m.instances[testID].busy == ""
+	})
+	backups, _ = m.ListBackups(testID)
+	if len(backups) != 2 || backups[1].Name != "20240103-000000.tar.gz" {
+		t.Fatalf("backups = %+v", backups)
 	}
 }
 

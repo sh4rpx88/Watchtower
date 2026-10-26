@@ -43,6 +43,7 @@ type Template struct {
 	Start       string            `yaml:"start" json:"start"`
 	Stop        string            `yaml:"stop" json:"stop"`                     // console command for a clean shutdown
 	Save        string            `yaml:"save,omitempty" json:"save,omitempty"` // console command that flushes the world to disk, sent before backups
+	Say         string            `yaml:"say,omitempty" json:"say,omitempty"`   // console command that broadcasts {{.message}} to players, for restart warnings
 	Ports       []Port            `yaml:"ports" json:"ports"`
 	Config      []ConfigField     `yaml:"config" json:"config"`
 	Stats       Stats             `yaml:"stats" json:"stats"`

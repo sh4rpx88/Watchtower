@@ -40,6 +40,9 @@ type Server struct {
 	tokens       *jsonList[APIToken]
 	webhooks     *jsonList[Webhook]
 	users        *jsonList[User]
+	schedules    *jsonList[Schedule]
+	sched        scheduler
+	settings     *jsonList[PanelSettings] // holds at most one entry
 	events       chan Event
 	activity     *activity
 
@@ -65,17 +68,27 @@ func New(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	schedules, err := openJSONList[Schedule](cfg.DataDir, "schedules.json")
+	if err != nil {
+		return nil, err
+	}
+	settings, err := openJSONList[PanelSettings](cfg.DataDir, "settings.json")
+	if err != nil {
+		return nil, err
+	}
 	act, err := openActivity(cfg.DataDir)
 	if err != nil {
 		return nil, err
 	}
 	s := &Server{cfg: cfg, store: st, consoles: newConsoles(), statsTracker: newStatsTracker(),
-		tokens: tokens, webhooks: webhooks, events: make(chan Event, 256), activity: act, users: users,
+		tokens: tokens, webhooks: webhooks, events: make(chan Event, 256), activity: act, users: users, schedules: schedules, settings: settings,
+		sched:  scheduler{running: map[string]context.CancelFunc{}},
 		agents: map[string]*agentConn{}, sessions: map[string]session{}}
 	if err := s.ensureAdmin(); err != nil {
 		return nil, err
 	}
 	go s.deliverEvents(context.Background())
+	s.startSchedules()
 	return s, nil
 }
 
@@ -100,11 +113,18 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/instances", read(s.handleListInstances))
 	mux.HandleFunc("GET /api/v1/instances/{id}", read(s.handleGetInstance))
 	mux.HandleFunc("GET /api/v1/instances/{id}/stats", read(s.handleStats))
+	mux.HandleFunc("GET /api/v1/settings", read(s.handleGetSettings))
 
 	mux.HandleFunc("POST /api/v1/instances/{id}/{action}", control(logged("{action}", s.handleAction)))
 	mux.HandleFunc("GET /api/v1/instances/{id}/console", control(s.handleConsole))
 
 	mux.HandleFunc("PUT /api/v1/instances/{id}/settings", manage(logged("changed the settings", s.handleUpdateSettings)))
+	mux.HandleFunc("PATCH /api/v1/instances/{id}", manage(logged("changed the server details", s.handleUpdateInstance)))
+	mux.HandleFunc("GET /api/v1/instances/{id}/schedules", manage(s.handleListSchedules))
+	mux.HandleFunc("POST /api/v1/instances/{id}/schedules", manage(logged("added the schedule {note}", s.handleCreateSchedule)))
+	mux.HandleFunc("PUT /api/v1/instances/{id}/schedules/{scheduleId}", manage(logged("changed the schedule {note}", s.handleUpdateSchedule)))
+	mux.HandleFunc("DELETE /api/v1/instances/{id}/schedules/{scheduleId}", manage(logged("removed the schedule {note}", s.handleDeleteSchedule)))
+	mux.HandleFunc("POST /api/v1/instances/{id}/schedules/{scheduleId}/run", manage(s.handleRunSchedule))
 	mux.HandleFunc("GET /api/v1/instances/{id}/files", manage(s.handleListFiles))
 	mux.HandleFunc("DELETE /api/v1/instances/{id}/files", manage(logged("deleted {path}", s.handleDeleteFile)))
 	mux.HandleFunc("POST /api/v1/instances/{id}/files/mkdir", manage(logged("made the folder {path}", s.handleMkdir)))
@@ -117,6 +137,7 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("POST /api/v1/instances", admin(logged("created the server", s.handleCreateInstance)))
 	mux.HandleFunc("DELETE /api/v1/instances/{id}", admin(logged("deleted the server", s.handleDeleteInstance)))
+	mux.HandleFunc("PUT /api/v1/settings", admin(logged("changed the panel settings", s.handleUpdateSettingsPanel)))
 	mux.HandleFunc("GET /api/v1/users", admin(s.handleListUsers))
 	mux.HandleFunc("POST /api/v1/users", admin(s.handleCreateUser))
 	mux.HandleFunc("PATCH /api/v1/users/{userId}", admin(s.handleUpdateUser))

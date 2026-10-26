@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	_ "time/tzdata" // so TZ works in slim containers without zoneinfo
 
 	"github.com/sh4rpx88/Watchtower/internal/panel"
 	"github.com/sh4rpx88/Watchtower/internal/templates"

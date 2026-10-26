@@ -1,5 +1,5 @@
 import { FormEvent, ReactNode, useCallback, useEffect, useState } from "react";
-import { Activity, AlertTriangle, LogOut, Play, Plug, Square, UserCog, UserMinus, UserPlus } from "lucide-react";
+import { Activity, AlertTriangle, Archive, LogOut, Play, Plug, Settings, Square, UserCog, UserMinus, UserPlus } from "lucide-react";
 import { ActivityEvent, Instance, Me, Role, User, api } from "./api";
 
 function timeOf(iso: string) {
@@ -16,6 +16,8 @@ const activityKinds: Record<string, { label: string; icon: ReactNode; color: str
   "server.ready": { label: "Server ready", icon: <Play size={22} />, color: "green" },
   "server.stopped": { label: "Server stopped", icon: <Square size={20} />, color: "muted" },
   "server.crashed": { label: "Server crashed", icon: <AlertTriangle size={22} />, color: "red" },
+  "backup.done": { label: "Backup saved", icon: <Archive size={22} />, color: "blue" },
+  "backup.failed": { label: "Backup failed", icon: <Archive size={22} />, color: "red" },
   action: { label: "", icon: <Activity size={22} />, color: "action" },
 };
 
@@ -208,7 +210,7 @@ export function Account({
   token: string;
   me: Me;
   onLogout: () => void;
-  onOpen?: (page: "users" | "integrations") => void; // admins only
+  onOpen?: (page: "users" | "integrations" | "settings") => void; // admins only
 }) {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -251,6 +253,9 @@ export function Account({
             </button>
             <button onClick={() => onOpen("integrations")}>
               <Plug size={16} /> Integrations
+            </button>
+            <button onClick={() => onOpen("settings")}>
+              <Settings size={16} /> Settings
             </button>
           </>
         )}

@@ -193,6 +193,18 @@ func (s *Server) handleAgentMessage(a *agentConn, env protocol.Envelope) {
 				s.observeLine(in, line.Line)
 			}
 		}
+	case protocol.TypeBackupDone:
+		var res protocol.BackupResult
+		if json.Unmarshal(env.Payload, &res) == nil {
+			if in, ok := s.store.get(res.ID); ok && in.Agent == a.info.Name {
+				e := s.event(in, EventBackupDone, "")
+				if res.Error != "" {
+					e.Type, e.Error = EventBackupFailed, res.Error
+				}
+				e.Backup, e.Size = res.Name, res.Size
+				s.emit(e)
+			}
+		}
 	case protocol.TypeResources:
 		var res protocol.Resources
 		if json.Unmarshal(env.Payload, &res) == nil {

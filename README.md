@@ -27,6 +27,8 @@ people as viewers, operators or admins. Click **Add server**, pick a game, and p
 Game servers run as their own containers named `watchtower-<id>` and keep running if the agent restarts.
 Server files live in `/srv/watchtower/instances/` and backups in `/srv/watchtower/backups/`; keep an eye on disk space.
 To use it from your phone or away from home, see [docs/remote-access.md](docs/remote-access.md).
+Under **Settings**, put the address friends use (your public IP or a DNS name) so every server shows what to type to join.
+Each server's **Schedules** tab can restart, back up or run a command on a timetable; set `TZ` in `.env` so times match yours.
 Remember to open the game ports (for example 25565/tcp for Minecraft, 16261-16262/udp for Project Zomboid) on your router or firewall.
 
 ## Develop
@@ -47,6 +49,6 @@ The web UI's artwork lives in `web/public/art/`. Game pictures are picked by tem
 2. First games end to end: install, start, stop, live console *(done)*
 3. Daily use: config editor, file manager, backups, stats API with tokens and webhooks *(done)*
 4. Users: accounts with roles and an activity log *(done)*; per-server access later
-5. Scale out: remote agents, scheduler, auto-updates, Discord bot
+5. Scale out: scheduler *(done)*, remote agents, auto-updates, Discord bot
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) to help. Licensed under MIT.

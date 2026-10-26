@@ -10,6 +10,7 @@ env:
   HOME: /server
 start: ./start-server.sh -servername {{.servername}} -adminpassword {{.adminpassword}}
 save: save
+say: 'servermsg "{{.message}}"'
 stop: quit
 ports:
   - { name: game, port: 16261, protocol: udp }
