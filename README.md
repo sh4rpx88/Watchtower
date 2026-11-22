@@ -31,6 +31,9 @@ Under **Settings**, put the address friends use (your public IP or a DNS name) s
 Each server's **Schedules** tab can restart, back up or run a command on a timetable; set `TZ` in `.env` so times match yours.
 For Project Zomboid, pick Build 42, unstable or Build 41 under the server's **Settings**, then Install. After the first
 start the Settings tab lists every server and sandbox option from the game's own files.
+The **Mods** tab adds Project Zomboid mods by Steam Workshop link, ID or whole collection, and Minecraft modpacks from
+Modrinth (it sets up the Minecraft version and Fabric, Forge, NeoForge or Quilt for you). A Minecraft server can also
+run a mod loader on its own: pick it under Settings, press Update, and put mods in the `mods` folder.
 Under **Integrations**, the Discord bot keeps a live status board in a channel, with buttons to start, stop, restart
 and back up servers for members with a role you choose; the page walks you through creating the bot.
 Remember to open the game ports (for example 25565/tcp for Minecraft, 16261-16262/udp for Project Zomboid) on your router or firewall.

@@ -1,22 +1,43 @@
 id: minecraft-java
 name: Minecraft (Java Edition)
-description: Vanilla Minecraft Java server.
+description: Minecraft Java server, vanilla or with Fabric, Forge, NeoForge or Quilt, or a Modrinth modpack.
 image: "eclipse-temurin:{{.javaVersion}}-jre"  # javaVersion comes from the release being installed
 install:
-  method: mojang   # server.jar from Mojang's version manifest
-  version: latest  # "latest" or a release such as 1.21.4
-start: java -Xmx{{.memory}} -jar server.jar nogui
+  method: minecraft     # Mojang's server.jar, plus the mod loader or modpack the settings pick
+  version: "{{.version}}"
+start: sh ./watchtower-start.sh {{.memory}}
 save: save-all flush
 say: "say {{.message}}"
 stop: stop
 files:
   # Written before every start. Minecraft refuses to run until the EULA is accepted.
   eula.txt: "eula={{.eula}}\n"
+  # Starts what the last install set up: vanilla, a mod loader, or a modpack.
+  watchtower-start.sh: |
+    #!/bin/sh
+    launch="-jar server.jar"
+    [ -f .watchtower-launch ] && launch=$(cat .watchtower-launch)
+    exec java -Xmx"$1" $launch nogui
+mods:
+  kind: modrinth
 ports:
   - { name: game, port: 25565, protocol: tcp }
 config:
   - { key: eula, label: "I accept the Minecraft EULA (https://aka.ms/MinecraftEULA)", type: bool, default: "false", required: true }
-  - { key: memory, label: Max memory, type: string, default: 2G }
+  - { key: memory, label: Max memory, type: string, default: 2G, help: "Modpacks usually want 6G or more." }
+  - key: loader
+    label: Mod loader
+    type: select
+    default: vanilla
+    choices:
+      - { value: vanilla, label: "None (vanilla)" }
+      - { value: fabric, label: Fabric }
+      - { value: forge, label: Forge }
+      - { value: neoforge, label: NeoForge }
+      - { value: quilt, label: Quilt }
+    help: Press Update after changing this. Put mods in the mods folder with the File Manager, or pick a modpack on the Mods tab, which sets the loader for you.
+  - { key: version, label: Minecraft version, type: string, default: latest, help: "latest, or a release such as 1.21.1. Press Update after changing this. A modpack picks its own version." }
+  - { key: modpack, label: Modpack, type: string, default: "", hidden: true }
   - { key: motd, label: Message of the day, type: string, default: "A Minecraft Server", file: server.properties }
   - { key: max-players, label: Max players, type: int, default: "20", file: server.properties }
   - { key: difficulty, label: Difficulty, type: select, options: [peaceful, easy, normal, hard], default: normal, file: server.properties }

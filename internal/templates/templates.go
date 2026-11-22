@@ -32,6 +32,7 @@ type ConfigField struct {
 	Help     string   `yaml:"help,omitempty" json:"help,omitempty"`         // shown under the field
 	File     string   `yaml:"file,omitempty" json:"file,omitempty"`         // key=value config file the value is written to before each start
 	Required bool     `yaml:"required,omitempty" json:"required,omitempty"` // bools must be "true", others non-empty
+	Hidden   bool     `yaml:"hidden,omitempty" json:"hidden,omitempty"`     // set by another page (such as Mods), not the setup form
 }
 
 type Choice struct {
@@ -73,12 +74,30 @@ type Template struct {
 	Ports       []Port            `yaml:"ports" json:"ports"`
 	Config      []ConfigField     `yaml:"config" json:"config"`
 	GameConfig  []GameConfig      `yaml:"gameConfig,omitempty" json:"gameConfig,omitempty"`
+	Mods        *Mods             `yaml:"mods,omitempty" json:"mods,omitempty"`
 	Stats       Stats             `yaml:"stats" json:"stats"`
 }
 
+// Mods says how the panel's Mods tab manages the game's mods.
+//
+// For "workshop", the mods are Steam Workshop items listed in a key=value
+// settings file, as Project Zomboid does; the game downloads them itself
+// when it starts. For "modrinth", the server installs a Modrinth modpack
+// named by the hidden modpack setting, on the mod loader it needs.
+type Mods struct {
+	Kind        string `yaml:"kind" json:"kind"`                                   // workshop or modrinth
+	AppID       int    `yaml:"appId,omitempty" json:"appId,omitempty"`             // workshop: the game's Steam app ID
+	File        string `yaml:"file,omitempty" json:"file,omitempty"`               // workshop: settings file holding the lists; may use settings
+	WorkshopKey string `yaml:"workshopKey,omitempty" json:"workshopKey,omitempty"` // workshop: key listing Workshop item IDs
+	ModKey      string `yaml:"modKey,omitempty" json:"modKey,omitempty"`           // workshop: key listing the mod IDs to load, in order
+	MapKey      string `yaml:"mapKey,omitempty" json:"mapKey,omitempty"`           // workshop: key listing map folders, in order
+	ModPrefix   string `yaml:"modPrefix,omitempty" json:"modPrefix,omitempty"`     // workshop: written before each mod ID; may use settings
+	BaseMap     string `yaml:"baseMap,omitempty" json:"baseMap,omitempty"`         // workshop: the game's own map, kept last
+}
+
 type Install struct {
-	Method      string `yaml:"method" json:"method"` // steamcmd, mojang, or download
-	Version     string `yaml:"version,omitempty" json:"version,omitempty"`
+	Method      string `yaml:"method" json:"method"`                       // steamcmd, minecraft (mojang), or download
+	Version     string `yaml:"version,omitempty" json:"version,omitempty"` // may use settings like {{.version}}
 	SteamAppID  int    `yaml:"steamAppId,omitempty" json:"steamAppId,omitempty"`
 	SteamBeta   string `yaml:"steamBeta,omitempty" json:"steamBeta,omitempty"` // Steam branch, may use settings like {{.branch}}; empty or "public" is the default
 	DownloadURL string `yaml:"downloadUrl,omitempty" json:"downloadUrl,omitempty"`
@@ -120,6 +139,14 @@ func LoadDir(dir string) ([]Template, error) {
 				if _, err := regexp.Compile(g.Match); err != nil {
 					return nil, fmt.Errorf("%s: group %s: %w", f, g.Name, err)
 				}
+			}
+		}
+		if m := t.Mods; m != nil {
+			switch {
+			case m.Kind == "workshop" && (m.File == "" || m.WorkshopKey == "" || m.ModKey == ""):
+				return nil, fmt.Errorf("%s: workshop mods need file, workshopKey and modKey", f)
+			case m.Kind != "workshop" && m.Kind != "modrinth":
+				return nil, fmt.Errorf("%s: mods kind must be workshop or modrinth", f)
 			}
 		}
 		for _, re := range []string{t.Stats.Ready, t.Stats.Join, t.Stats.Leave} {

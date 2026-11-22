@@ -58,8 +58,8 @@ func (d DockerRuntime) Install(ctx context.Context, spec protocol.InstanceSpec, 
 	}
 	inst := spec.Template.Install
 	switch inst.Method {
-	case "mojang":
-		return d.installMojang(ctx, inst.Version, dir, out)
+	case "minecraft", "mojang":
+		return d.installMinecraft(ctx, spec, dir, out)
 	case "steamcmd":
 		args, err := steamcmdArgs(spec, dir)
 		if err != nil {
@@ -121,57 +121,6 @@ func steamBeta(args []string) string {
 		}
 	}
 	return ""
-}
-
-const mojangManifest = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
-
-func (d DockerRuntime) installMojang(ctx context.Context, version, dir string, out func(string)) error {
-	var manifest struct {
-		Latest   struct{ Release string }
-		Versions []struct{ ID, URL string }
-	}
-	if err := d.getJSON(ctx, mojangManifest, &manifest); err != nil {
-		return fmt.Errorf("version manifest: %w", err)
-	}
-	if version == "" || version == "latest" {
-		version = manifest.Latest.Release
-	}
-	var versionURL string
-	for _, v := range manifest.Versions {
-		if v.ID == version {
-			versionURL = v.URL
-		}
-	}
-	if versionURL == "" {
-		return fmt.Errorf("minecraft version %q not found", version)
-	}
-	var meta struct {
-		Downloads struct {
-			Server struct{ URL, SHA1 string }
-		}
-		JavaVersion struct {
-			MajorVersion int `json:"majorVersion"`
-		} `json:"javaVersion"`
-	}
-	if err := d.getJSON(ctx, versionURL, &meta); err != nil {
-		return fmt.Errorf("version %s: %w", version, err)
-	}
-	if meta.Downloads.Server.URL == "" {
-		return fmt.Errorf("version %s has no server download", version)
-	}
-	out("Downloading Minecraft server " + version)
-	if err := d.download(ctx, meta.Downloads.Server.URL, filepath.Join(dir, "server.jar"), meta.Downloads.Server.SHA1); err != nil {
-		return err
-	}
-	java := meta.JavaVersion.MajorVersion
-	if java == 0 {
-		java = 8 // versions before 1.17 don't say
-	}
-	if err := saveInstallVars(dir, map[string]string{"javaVersion": fmt.Sprint(java)}); err != nil {
-		return err
-	}
-	out(fmt.Sprintf("Minecraft server %s installed (needs Java %d)", version, java))
-	return nil
 }
 
 // installVarsFile holds values learned during install, such as the Java

@@ -55,6 +55,16 @@ config:
   - { key: MaxPlayers, label: Max players, type: int, default: "16", file: "Zomboid/Server/{{.servername}}.ini" }
   - { key: Password, label: Join password (optional), type: string, default: "", file: "Zomboid/Server/{{.servername}}.ini" }
   - { key: Public, label: List in the in-game server browser, type: bool, default: "false", file: "Zomboid/Server/{{.servername}}.ini" }
+mods:
+  kind: workshop
+  appId: 108600
+  file: "Zomboid/Server/{{.servername}}.ini"
+  workshopKey: WorkshopItems
+  modKey: Mods
+  mapKey: Map
+  baseMap: "Muldraugh, KY"
+  # Build 42 writes a backslash before each mod ID; Build 41 doesn't.
+  modPrefix: '{{if ne .branch "legacy41"}}\{{end}}'
 gameConfig:
   - label: Server settings
     path: "Zomboid/Server/{{.servername}}.ini"
@@ -63,6 +73,9 @@ gameConfig:
     locked:
       DefaultPort: Watchtower maps this port. Change the server's port when you create it instead.
       UDPPort: Watchtower maps this port. Change the server's port when you create it instead.
+      WorkshopItems: Manage mods on the Mods tab.
+      Mods: Manage mods on the Mods tab.
+      Map: Manage mods on the Mods tab.
     groups:
       - { name: Joining and listing, match: "^(Public|PublicName|PublicDescription|MaxPlayers|Password|Open|ServerWelcomeMessage|AutoCreateUserInWhiteList|DropOffWhiteListAfterDeath|MaxAccountsPerUser|AllowNonAsciiUsername|DenyLoginOnOverloadedServer|LoginQueue.*|Ping.*|SteamScoreboard|SteamVAC|BanKnownBlockedSteamIDs|AllowCoop)$" }
       - { name: PvP, match: "^(PVP.*|Safety.*|ShowSafety|PlayerBumpPlayer|War.*)$" }

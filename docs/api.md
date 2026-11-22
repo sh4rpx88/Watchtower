@@ -36,6 +36,9 @@ session token or an API token (see below),
 | DELETE | `/instances/{id}/backups/{name}` | Delete a backup |
 | GET | `/instances/{id}/game-config` | The game's own settings files (see Game settings), read option by option |
 | PUT | `/instances/{id}/game-config/{file}` | `{"values": {"PVP": "false", "ZombieLore.Speed": "1"}}` for the file at that index; server must be stopped |
+| GET | `/instances/{id}/mods` | Workshop mods (see Mods): `{"list": {...}, "items": {"<id>": {...}}}` |
+| POST | `/instances/{id}/mods/lookup` | `{"query": "<links or IDs>"}`; returns the Workshop items found, in load order |
+| PUT | `/instances/{id}/mods` | `{"workshopItems": [...], "mods": [...], "maps": [...]}`; server must be stopped |
 | GET | `/instances/{id}/schedules` | The server's schedules, each with `nextRun` |
 | POST | `/instances/{id}/schedules` | Add one (see Schedules) |
 | PUT | `/instances/{id}/schedules/{scheduleId}` | Replace one |
@@ -123,6 +126,21 @@ installed game version. Changes only replace the value on each line. Each settin
 like `ZombieLore.Speed`), `value`, `type` (`bool`, `int`, `number`, `string`, `select`), and optionally `description`,
 `default`, `min`, `max`, `choices` and `locked` (why it can't be changed here). The files exist after the server's
 first start; until then `exists` is false.
+
+## Mods
+
+For games whose template has `mods: {kind: workshop}` (Project Zomboid), the mods are Steam Workshop items listed in
+the game's settings file. `GET .../mods` returns that `list` (`workshopItems`, `mods` and `maps`, in load order, with
+mod IDs bare) and each item's details from Steam: `title`, `previewUrl`, `size`, and the `modIds`, `mapFolders` and
+`requires` read from its Workshop page. `lookup` turns pasted links, IDs or collections into items, with the items
+each one requires listed before it. `PUT` writes the lists; Build 42 servers get a backslash before each mod ID. The
+game downloads the items itself when it starts.
+
+Minecraft (`kind: modrinth`) uses three settings instead: `loader` (`vanilla`, `fabric`, `forge`, `neoforge`,
+`quilt`), `version` (`latest` or a release), and `modpack`, a Modrinth version ID. With a modpack, Install downloads
+its `.mrpack`, sets up the Minecraft version and loader it names, downloads its server files and copies its
+overrides, and removes files an earlier version of the pack had that the new one dropped. Clearing `modpack` and
+installing again removes the pack's files but keeps worlds and configs.
 
 ## API tokens
 

@@ -13,6 +13,7 @@ import {
   Play,
   Plug,
   Plus,
+  Puzzle,
   RotateCw,
   Search,
   Server as ServerIcon,
@@ -47,6 +48,7 @@ import {
 } from "./api";
 import { Account, ActivityItem, ActivityLog, UserList } from "./People";
 import Backups from "./Backups";
+import Mods from "./Mods";
 import Schedules from "./Schedules";
 import GameSettings from "./GameSettings";
 import Files from "./Files";
@@ -126,13 +128,14 @@ const stateLabels: Record<string, string> = {
   error: "Error",
 };
 
-type Tab = "console" | "settings" | "schedules" | "files" | "backups";
+type Tab = "console" | "settings" | "mods" | "schedules" | "files" | "backups";
 type Page = "overview" | "servers" | "machines" | "activity" | "integrations" | "users" | "settings" | "account";
 type View = { page: Page } | { page: "server"; id: string; tab: Tab };
 
 const tabs: { id: Tab; label: string; icon: ReactNode; need: keyof Perms }[] = [
   { id: "console", label: "Console", icon: <SquareTerminal size={16} />, need: "control" },
   { id: "settings", label: "Settings", icon: <Settings size={16} />, need: "manage" },
+  { id: "mods", label: "Mods", icon: <Puzzle size={16} />, need: "manage" },
   { id: "files", label: "File Manager", icon: <FolderOpen size={16} />, need: "manage" },
   { id: "schedules", label: "Schedules", icon: <CalendarClock size={16} />, need: "manage" },
   { id: "backups", label: "Backups", icon: <Archive size={16} />, need: "manage" },
@@ -243,6 +246,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const { agents, templates, instances, stats, activity } = data;
   const current = view.page === "server" ? instances.find((i) => i.id === view.id) : undefined;
   const gameName = (id: string) => templates.find((t) => t.id === id)?.name ?? id;
+  const templateOf = (i: Instance) => templates.find((t) => t.id === i.templateId);
   const openServer = (id: string, tab: Tab = "console") => setView({ page: "server", id, tab });
   const addServer = () => {
     setCreating(true);
@@ -319,7 +323,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                   {current?.id === i.id && view.page === "server" && (
                     <div className="subnav">
                       {tabs
-                        .filter((t) => perms[t.need])
+                        .filter((t) => perms[t.need] && (t.id !== "mods" || templateOf(i)?.mods))
                         .map((t) => (
                           <button key={t.id} className={view.tab === t.id ? "active" : ""} onClick={() => openServer(i.id, t.id)}>
                             {t.icon} {t.label}
@@ -885,42 +889,44 @@ function SettingsFields({
   const set = (key: string, value: string) => onChange({ ...values, [key]: value });
   return (
     <>
-      {fields.map((f) => {
-        const value = values[f.key] ?? f.default;
-        if (f.type === "bool") {
+      {fields
+        .filter((f) => !f.hidden)
+        .map((f) => {
+          const value = values[f.key] ?? f.default;
+          if (f.type === "bool") {
+            return (
+              <label key={f.key} className="check">
+                <input type="checkbox" checked={value === "true"} onChange={(e) => set(f.key, String(e.target.checked))} />
+                {f.label}
+                {f.help && <span className="help">{f.help}</span>}
+              </label>
+            );
+          }
           return (
-            <label key={f.key} className="check">
-              <input type="checkbox" checked={value === "true"} onChange={(e) => set(f.key, String(e.target.checked))} />
+            <label key={f.key}>
               {f.label}
+              {f.required && " *"}
+              {f.type === "select" && f.choices ? (
+                <select value={value} onChange={(e) => set(f.key, e.target.value)}>
+                  {f.choices.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              ) : f.type === "select" && f.options ? (
+                <select value={value} onChange={(e) => set(f.key, e.target.value)}>
+                  {f.options.map((o) => (
+                    <option key={o}>{o}</option>
+                  ))}
+                </select>
+              ) : (
+                <input type={f.type === "int" ? "number" : "text"} value={value} onChange={(e) => set(f.key, e.target.value)} />
+              )}
               {f.help && <span className="help">{f.help}</span>}
             </label>
           );
-        }
-        return (
-          <label key={f.key}>
-            {f.label}
-            {f.required && " *"}
-            {f.type === "select" && f.choices ? (
-              <select value={value} onChange={(e) => set(f.key, e.target.value)}>
-                {f.choices.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-            ) : f.type === "select" && f.options ? (
-              <select value={value} onChange={(e) => set(f.key, e.target.value)}>
-                {f.options.map((o) => (
-                  <option key={o}>{o}</option>
-                ))}
-              </select>
-            ) : (
-              <input type={f.type === "int" ? "number" : "text"} value={value} onChange={(e) => set(f.key, e.target.value)} />
-            )}
-            {f.help && <span className="help">{f.help}</span>}
-          </label>
-        );
-      })}
+        })}
     </>
   );
 }
@@ -1219,7 +1225,7 @@ function ServerView({
         <section className="card">
           <nav className="tabs">
             {tabs
-              .filter((t) => perms[t.need])
+              .filter((t) => perms[t.need] && (t.id !== "mods" || template?.mods))
               .map((t) => (
                 <button key={t.id} className={tab === t.id ? "active" : ""} onClick={() => setTab(t.id)}>
                   {t.icon} {t.label}
@@ -1237,6 +1243,14 @@ function ServerView({
               {template.gameConfig?.length ? <GameSettings key={`g-${instance.id}`} token={token} instance={instance} /> : null}
             </>
           )}
+          {tab === "mods" &&
+            perms.manage &&
+            template?.mods &&
+            (installed && instance.agentOnline ? (
+              <Mods token={token} instance={instance} template={template} onChanged={onChanged} />
+            ) : (
+              <p className="muted">Install the server and keep its machine online to manage mods.</p>
+            ))}
           {tab === "schedules" && perms.manage && <Schedules token={token} instance={instance} timeZone={timeZone} />}
           {tab === "files" &&
             perms.manage &&

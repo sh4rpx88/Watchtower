@@ -22,6 +22,7 @@ export type ConfigField = {
   help?: string;
   file?: string;
   required?: boolean;
+  hidden?: boolean;
 };
 
 export type DiscordView = {
@@ -62,7 +63,24 @@ export type Template = {
   ports: Port[];
   config: ConfigField[];
   gameConfig?: { label: string; path: string; format: string }[];
+  mods?: { kind: "workshop" | "modrinth"; baseMap?: string };
 };
+
+// A Steam Workshop item, with the mod IDs and map folders its page lists.
+export type WorkshopItem = {
+  id: string;
+  found: boolean;
+  title?: string;
+  previewUrl?: string;
+  url: string;
+  modIds: string[];
+  mapFolders: string[];
+  requires: string[];
+  size?: number;
+  updatedAt?: number;
+};
+
+export type ModList = { file: string; exists: boolean; workshopItems: string[]; mods: string[]; maps: string[] };
 
 export type Instance = {
   id: string;
