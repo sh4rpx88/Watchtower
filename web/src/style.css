@@ -392,3 +392,50 @@ button.copy { padding: 4px 6px; min-height: 0; }
 .guide a, .integration a { color: #e9a3a7; }
 .create .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 a.button { color: var(--text) !important; text-decoration: none; }
+
+/* Mods */
+.mods { display: grid; gap: 12px; }
+.mods > p { margin: 0; }
+.mods .section-title { margin-top: 10px; }
+.mods-head .section-title .muted { font-family: system-ui, sans-serif; text-transform: none; letter-spacing: 0; font-size: 0.82rem; margin-left: 6px; }
+.mod-add form { display: flex; gap: 8px; flex-wrap: wrap; }
+.mod-add .search { flex: 1; }
+.mod-found { margin-top: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 3px; background: #121011; display: grid; gap: 8px; }
+.mod-found p { margin: 0; }
+.mod-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.mod-card { display: flex; gap: 12px; align-items: flex-start; padding: 10px; border: 1px solid var(--line-soft); border-radius: 3px; background: #0f0d0e; min-width: 0; }
+.mod-card.have { opacity: 0.55; }
+.mod-card > input[type="checkbox"] { margin-top: 22px; }
+.mod-list.compact .mod-card { padding: 8px; }
+.mod-thumb { width: 64px; height: 64px; object-fit: cover; border-radius: 3px; border: 1px solid var(--line); flex: none; background: #0a090a; }
+.mod-thumb.empty { display: grid; place-items: center; color: var(--muted); }
+.mod-body { flex: 1; min-width: 0; display: grid; gap: 6px; }
+.mod-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.mod-title a { font-size: 0.8rem; display: inline-flex; gap: 3px; align-items: center; text-decoration: none; }
+.mod-title .muted { font-size: 0.8rem; }
+.mod-actions { display: flex; gap: 4px; flex: none; }
+.mod-actions button { padding: 5px 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: #0d0c0d; cursor: pointer; }
+.chip input { margin: 0; }
+.chip.on { color: #f0e6df; border-color: #7a2a31; background: #1f1013; }
+.chip button { border: none; background: none; padding: 0; color: inherit; display: inline-flex; cursor: pointer; }
+.chip-add input { font-size: 0.8rem; padding: 3px 10px; border-radius: 999px; width: 140px; }
+.notice.small, p.small, .error.small { font-size: 0.8rem; margin: 0; }
+.notice.small button { margin-left: auto; padding: 3px 10px; font-size: 0.8rem; }
+.mod-maps { display: grid; gap: 6px; margin-top: 6px; }
+.pack-versions { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.pack-versions label { display: grid; gap: 4px; flex: 1; min-width: 220px; font-size: 0.85rem; color: var(--muted); }
+.mod-card.pack.current { border-color: #4a2329; }
+@media (max-width: 700px) {
+  .mod-add .search { order: 0; flex-basis: 100%; }
+  .mod-add form button { flex: 1; }
+  .chip { padding: 4px 10px; }
+  .chip input, .chip-add input { min-height: 0; }
+  .chip-add input { padding: 6px 10px; width: 130px; }
+  .notice.small { flex-wrap: wrap; }
+  .notice.small button { min-height: 0; white-space: nowrap; }
+  .mod-card { flex-wrap: wrap; }
+  .mod-thumb { width: 48px; height: 48px; }
+  .mod-actions { width: 100%; justify-content: flex-end; }
+}

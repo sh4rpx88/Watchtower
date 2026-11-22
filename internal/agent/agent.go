@@ -178,6 +178,15 @@ func dispatch(mgr *Manager, in protocol.Envelope) (any, error) {
 			return mgr.ReadGameConfig(req.InstanceSpec)
 		}
 		return nil, mgr.WriteGameConfig(req)
+	case protocol.TypeModsRead, protocol.TypeModsWrite:
+		req, err := decode[protocol.ModsRequest](in.Payload)
+		if err != nil {
+			return nil, err
+		}
+		if in.Type == protocol.TypeModsRead {
+			return mgr.ReadMods(req.InstanceSpec)
+		}
+		return nil, mgr.WriteMods(req)
 	case protocol.TypeStop, protocol.TypeDelete, protocol.TypeBackupList:
 		ref, err := decode[protocol.InstanceRef](in.Payload)
 		if err != nil {

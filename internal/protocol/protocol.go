@@ -35,6 +35,9 @@ const (
 	TypeGameConfigRead  = "gameconfig.read"  // payload: GameConfigRequest; response data: []GameConfigFile
 	TypeGameConfigWrite = "gameconfig.write" // payload: GameConfigRequest with File and Values
 
+	TypeModsRead  = "mods.read"  // payload: ModsRequest; response data: ModList
+	TypeModsWrite = "mods.write" // payload: ModsRequest with List
+
 	// Events from the agent.
 	TypeStatus     = "instance.status"    // payload: Status
 	TypeConsole    = "console.line"       // payload: ConsoleLine
@@ -188,6 +191,23 @@ type GameSetting struct {
 	Max         *float64           `json:"max,omitempty"`
 	Choices     []templates.Choice `json:"choices,omitempty"`
 	Locked      string             `json:"locked,omitempty"` // why it can't be changed here
+}
+
+// ModsRequest reads or, with List, writes the Workshop mod lists in the
+// settings file the template's mods section names.
+type ModsRequest struct {
+	InstanceSpec
+	List *ModList `json:"list,omitempty"`
+}
+
+// ModList is a Workshop game's mod lists, in load order. Mod IDs are bare,
+// without the prefix some game versions write before them.
+type ModList struct {
+	File          string   `json:"file"`
+	Exists        bool     `json:"exists"`
+	WorkshopItems []string `json:"workshopItems"`
+	Mods          []string `json:"mods"`
+	Maps          []string `json:"maps"`
 }
 
 type Status struct {

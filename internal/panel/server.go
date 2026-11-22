@@ -33,6 +33,7 @@ type Config struct {
 
 	DiscordAPI     string // Discord REST and gateway addresses; empty uses the real ones (tests point them elsewhere)
 	DiscordGateway string
+	SteamAPI       string // Steam Web API address; empty uses the real one
 }
 
 type Server struct {
@@ -50,6 +51,7 @@ type Server struct {
 	bot          *discordBot
 	events       chan Event
 	activity     *activity
+	workshop     workshopCache
 
 	mu       sync.Mutex
 	agents   map[string]*agentConn
@@ -138,6 +140,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/instances/{id}/schedules/{scheduleId}/run", manage(s.handleRunSchedule))
 	mux.HandleFunc("GET /api/v1/instances/{id}/game-config", manage(s.handleGameConfig))
 	mux.HandleFunc("PUT /api/v1/instances/{id}/game-config/{file}", manage(logged("changed the game settings: {note}", s.handleUpdateGameConfig)))
+	mux.HandleFunc("GET /api/v1/instances/{id}/mods", manage(s.handleMods))
+	mux.HandleFunc("POST /api/v1/instances/{id}/mods/lookup", manage(s.handleLookupMods))
+	mux.HandleFunc("PUT /api/v1/instances/{id}/mods", manage(logged("changed the mods: {note}", s.handleUpdateMods)))
 	mux.HandleFunc("GET /api/v1/instances/{id}/files", manage(s.handleListFiles))
 	mux.HandleFunc("DELETE /api/v1/instances/{id}/files", manage(logged("deleted {path}", s.handleDeleteFile)))
 	mux.HandleFunc("POST /api/v1/instances/{id}/files/mkdir", manage(logged("made the folder {path}", s.handleMkdir)))

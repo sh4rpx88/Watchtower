@@ -119,7 +119,7 @@ func TestMinecraftImageUsesInstalledJavaVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(args, " "); !strings.Contains(got, "eclipse-temurin:25-jre sh -c exec java -Xmx'2G' -jar server.jar nogui") {
+	if got := strings.Join(args, " "); !strings.Contains(got, "eclipse-temurin:25-jre sh -c exec sh ./watchtower-start.sh '2G'") {
 		t.Fatalf("unexpected args: %s", got)
 	}
 }
