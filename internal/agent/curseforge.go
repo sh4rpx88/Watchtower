@@ -54,12 +54,16 @@ func (d DockerRuntime) cfGet(ctx context.Context, key, path string, v any) error
 	}
 	req.Header.Set("x-api-key", key)
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "Watchtower (https://github.com/sh4rpx88/Watchtower)")
 	resp, err := d.client().Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusUnauthorized {
+			return fmt.Errorf("CurseForge refused the API key (%s); check it under Settings", resp.Status)
+		}
 		return fmt.Errorf("CurseForge answered %s", resp.Status)
 	}
 	return json.NewDecoder(resp.Body).Decode(v)

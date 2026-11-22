@@ -11,8 +11,9 @@ import (
 func TestCurseForge(t *testing.T) {
 	var lastQuery string
 	cf := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("x-api-key") != "my-key" {
+		if r.Header.Get("x-api-key") != "my-key" || !strings.HasPrefix(r.UserAgent(), "Watchtower") {
 			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprint(w, `{"error":"Forbidden"}`)
 			return
 		}
 		switch r.URL.Path {
@@ -41,7 +42,7 @@ func TestCurseForge(t *testing.T) {
 		HasCurseForgeKey bool           `json:"hasCurseForgeKey"`
 	}
 	c.do("PUT", "/api/v1/settings", map[string]string{"publicAddress": "play.example.com", "curseforgeKey": "bad key"}, http.StatusBadRequest, nil)
-	c.do("PUT", "/api/v1/settings", map[string]string{"publicAddress": "play.example.com", "curseforgeKey": "my-key"}, http.StatusOK, &view)
+	c.do("PUT", "/api/v1/settings", map[string]string{"publicAddress": "play.example.com", "curseforgeKey": " \"my-key\" "}, http.StatusOK, &view)
 	c.do("PUT", "/api/v1/settings", map[string]string{"publicAddress": "play2.example.com"}, http.StatusOK, nil)
 	c.do("GET", "/api/v1/settings", nil, http.StatusOK, &view)
 	if !view.HasCurseForgeKey || view.Settings["curseforgeKey"] != nil || view.Settings["publicAddress"] != "play2.example.com" {
@@ -66,6 +67,13 @@ func TestCurseForge(t *testing.T) {
 	}
 	c.do("GET", "/api/v1/curseforge/mods/../files", nil, http.StatusNotFound, nil)
 	c.do("GET", "/api/v1/curseforge/mods/123/files", nil, http.StatusNotFound, nil)
+
+	// A key CurseForge rejects shows what CurseForge said.
+	c.do("PUT", "/api/v1/settings", map[string]string{"curseforgeKey": "wrong"}, http.StatusOK, nil)
+	msg := c.doRaw("GET", "/api/v1/curseforge/search?q=atm", "", http.StatusBadGateway)
+	if !strings.Contains(msg, "403 Forbidden") || !strings.Contains(msg, "Forbidden") {
+		t.Fatalf("rejected key: %s", msg)
+	}
 
 	c.do("PUT", "/api/v1/settings", map[string]any{"clearCurseForgeKey": true}, http.StatusOK, &view)
 	if view.HasCurseForgeKey {

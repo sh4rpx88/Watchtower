@@ -68,7 +68,8 @@ func (s *Server) handleUpdateSettingsPanel(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	body := req.PanelSettings
-	body.CurseForgeKey = strings.TrimSpace(body.CurseForgeKey)
+	// People paste keys with the quotes from a shell command or a .env file.
+	body.CurseForgeKey = strings.Trim(strings.TrimSpace(body.CurseForgeKey), `"'`)
 	switch {
 	case req.ClearCurseForgeKey:
 		body.CurseForgeKey = ""
