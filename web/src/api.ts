@@ -218,4 +218,16 @@ export type Schedule = {
 };
 
 export type PanelSettings = { publicAddress: string; lanAddress: string };
-export type SettingsResponse = { settings: PanelSettings; timeZone: string };
+export type SettingsResponse = { settings: PanelSettings; timeZone: string; hasCurseForgeKey?: boolean };
+
+export type CurseForgePack = {
+  id: number;
+  name: string;
+  slug: string;
+  summary: string;
+  downloads: number;
+  logo?: string;
+  author?: string;
+  url: string;
+};
+export type CurseForgeFile = { id: number; name: string; gameVersions: string[]; releaseType: string; date: string; serverPack: boolean };

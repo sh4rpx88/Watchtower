@@ -236,3 +236,93 @@ func TestMinecraftStartScript(t *testing.T) {
 		t.Errorf("neoforge: %s", got)
 	}
 }
+
+func zipOf(t *testing.T, entries map[string]string) []byte {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for name, body := range entries {
+		w, _ := zw.Create(name)
+		w.Write([]byte(body))
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func TestInstallCurseForgePack(t *testing.T) {
+	blobs := map[string][]byte{"server.jar": []byte("vanilla server")}
+	fakeMinecraftWorld(t, map[string][]byte{}, blobs)
+	base := string(blobs["base"])
+	client := zipOf(t, map[string]string{"manifest.json": `{"name":"All the Mods 10","minecraft":{"version":"1.21.1","modLoaders":[{"id":"fabric-0.16.5","primary":true}]}}`})
+	server1 := zipOf(t, map[string]string{
+		"Server-Files-1.0/mods/alltheores.jar": "ores", "Server-Files-1.0/mods/old.jar": "old",
+		"Server-Files-1.0/config/a.toml": "pack config", "Server-Files-1.0/server.properties": "motd=pack",
+		"Server-Files-1.0/world/level.dat": "pack world",
+	})
+	server2 := zipOf(t, map[string]string{"mods/alltheores.jar": "ores v2", "startserver.sh": "#!/bin/sh"})
+	files := map[string]string{"10": "client.zip", "11": "server1.zip", "20": "client.zip", "21": "server2.zip", "30": "client.zip"}
+	blobs["client.zip"], blobs["server1.zip"], blobs["server2.zip"] = client, server1, server2
+	serverOf := map[string]int{"10": 11, "20": 21, "30": 0}
+
+	cf := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("x-api-key") != "cf-key" {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		id := strings.TrimPrefix(r.URL.Path, "/v1/mods/925200/files/")
+		blob, ok := files[id]
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		fmt.Fprintf(w, `{"data":{"id":%s,"displayName":"ATM10 %s","downloadUrl":"%s/blob/%s","serverPackFileId":%d,"hashes":[{"value":"%s","algo":1}]}}`,
+			id, id, base, blob, serverOf[id], sha1hex(blobs[blob]))
+	}))
+	defer cf.Close()
+	mcSources.CurseForge = cf.URL
+	mcSources.CurseForgeHosts = []string{"127.0.0.1"}
+
+	tpl := loadTemplate(t, "minecraft-java")
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "server.properties"), []byte("motd=mine"), 0o644)
+	install := func(pack, key string) error {
+		spec := protocol.InstanceSpec{ID: "abcdef0123456789", Template: tpl, CurseForgeKey: key,
+			Settings: tpl.Settings(map[string]string{"eula": "true", "modpack": pack})}
+		return DockerRuntime{}.Install(context.Background(), spec, dir, func(string) {})
+	}
+	read := func(name string) string {
+		b, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			return "<missing>"
+		}
+		return string(b)
+	}
+
+	if err := install("cf:925200:10", ""); err == nil || !strings.Contains(err.Error(), "API key") {
+		t.Errorf("no key: %v", err)
+	}
+	if err := install("cf:925200:30", "cf-key"); err == nil || !strings.Contains(err.Error(), "no server files") {
+		t.Errorf("no server pack: %v", err)
+	}
+	if err := install("cf:925200:10", "cf-key"); err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range map[string]string{
+		"mods/alltheores.jar": "ores", "mods/old.jar": "old", "config/a.toml": "pack config", "server.properties": "motd=mine",
+		"world/level.dat": "<missing>", launchFile: "-jar fabric-server-launch.jar\n", ".watchtower-modpack-client.zip": "<missing>", curseForgeDownload: "<missing>",
+	} {
+		if got := read(name); got != want {
+			t.Errorf("%s = %q, want %q", name, got, want)
+		}
+	}
+	if err := install("cf:925200:20", "cf-key"); err != nil {
+		t.Fatal(err)
+	}
+	if read("mods/alltheores.jar") != "ores v2" || read("mods/old.jar") != "<missing>" || read("startserver.sh") != "#!/bin/sh" {
+		t.Error("update didn't replace the pack's mods")
+	}
+	if err := install("cf:../1:2", "cf-key"); err == nil {
+		t.Error("bad pack setting accepted")
+	}
+}
