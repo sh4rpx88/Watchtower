@@ -3,10 +3,13 @@ package panel
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"regexp"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -75,6 +78,21 @@ func (m cfMod) pack() CurseForgePack {
 	return p
 }
 
+const curseForgeUserAgent = "Watchtower (https://github.com/sh4rpx88/Watchtower)"
+
+// replySnippet is the start of an error reply, to show what CurseForge said.
+func replySnippet(r io.Reader) string {
+	b, _ := io.ReadAll(io.LimitReader(r, 300))
+	text := strings.Join(strings.Fields(string(b)), " ")
+	if text == "" || strings.HasPrefix(text, "<") { // an HTML error page says nothing useful
+		return ""
+	}
+	if len(text) > 160 {
+		text = text[:160] + "…"
+	}
+	return ": " + text
+}
+
 func (s *Server) curseForgeAPI() string {
 	if s.cfg.CurseForgeAPI != "" {
 		return s.cfg.CurseForgeAPI
@@ -101,6 +119,7 @@ func (s *Server) curseForge(w http.ResponseWriter, ctx context.Context, path str
 	}
 	req.Header.Set("x-api-key", key)
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", curseForgeUserAgent)
 	resp, err := (&http.Client{Timeout: 20 * time.Second}).Do(req)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "couldn't reach CurseForge: "+err.Error())
@@ -109,13 +128,13 @@ func (s *Server) curseForge(w http.ResponseWriter, ctx context.Context, path str
 	defer resp.Body.Close()
 	switch {
 	case resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusUnauthorized:
-		writeError(w, http.StatusBadGateway, "CurseForge refused the API key; check it under Settings")
+		writeError(w, http.StatusBadGateway, fmt.Sprintf("CurseForge refused the API key (%s%s). Check that the whole key is pasted under Settings and that your CurseForge API access is approved", resp.Status, replySnippet(resp.Body)))
 		return false
 	case resp.StatusCode == http.StatusNotFound:
 		writeError(w, http.StatusNotFound, "CurseForge doesn't have that")
 		return false
 	case resp.StatusCode != http.StatusOK:
-		writeError(w, http.StatusBadGateway, "CurseForge answered "+resp.Status)
+		writeError(w, http.StatusBadGateway, "CurseForge answered "+resp.Status+replySnippet(resp.Body))
 		return false
 	}
 	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
