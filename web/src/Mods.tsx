@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, ExternalLink, Lock, Package, Plus, Search, Trash2, X } from "lucide-react";
-import { Instance, ModList, Template, WorkshopItem, api, formatSize } from "./api";
+import { CurseForgeFile, CurseForgePack, Instance, ModList, Template, WorkshopItem, api, formatSize } from "./api";
 
 // Mods manages a server's mods: Steam Workshop items for games like Project
 // Zomboid, or a Modrinth modpack for Minecraft.
@@ -8,15 +8,18 @@ export default function Mods({
   token,
   instance,
   template,
+  curseForgeKey,
   onChanged,
 }: {
   token: string;
   instance: Instance;
   template: Template;
+  curseForgeKey: boolean;
   onChanged: () => void;
 }) {
   if (template.mods?.kind === "workshop") return <WorkshopMods token={token} instance={instance} />;
-  if (template.mods?.kind === "modrinth") return <Modpacks token={token} instance={instance} onChanged={onChanged} />;
+  if (template.mods?.kind === "modrinth")
+    return <Modpacks token={token} instance={instance} curseForgeKey={curseForgeKey} onChanged={onChanged} />;
   return null;
 }
 
@@ -457,10 +460,32 @@ type PackProject = { id: string; slug: string; title: string; description: strin
 const loaderLabel: Record<string, string> = { fabric: "Fabric", forge: "Forge", neoforge: "NeoForge", quilt: "Quilt" };
 const serverLoader = (v: PackVersion) => v.loaders.find((l) => l in loaderLabel) ?? "vanilla";
 
-function Modpacks({ token, instance, onChanged }: { token: string; instance: Instance; onChanged: () => void }) {
+// The installed pack, from either site, as the Installed card shows it.
+type InstalledPack = {
+  title: string;
+  url: string;
+  site: string;
+  icon?: string;
+  details: string;
+  modrinth?: PackProject;
+  curseforge?: CurseForgePack;
+};
+
+function Modpacks({
+  token,
+  instance,
+  curseForgeKey,
+  onChanged,
+}: {
+  token: string;
+  instance: Instance;
+  curseForgeKey: boolean;
+  onChanged: () => void;
+}) {
   const current = instance.settings.modpack ?? "";
   const loader = instance.settings.loader ?? "vanilla";
-  const [installed, setInstalled] = useState<{ version: PackVersion; project: PackProject } | null>(null);
+  const [installed, setInstalled] = useState<InstalledPack | null>(null);
+  const [site, setSite] = useState<"modrinth" | "curseforge">(current.startsWith("cf:") ? "curseforge" : "modrinth");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const stopped = instance.state === "stopped" || instance.state === "error" || instance.state === "not_installed";
@@ -468,30 +493,62 @@ function Modpacks({ token, instance, onChanged }: { token: string; instance: Ins
   useEffect(() => {
     setInstalled(null);
     if (!current) return;
+    const cf = current.match(/^cf:(\d+):(\d+)$/);
+    if (cf) {
+      Promise.all([
+        api<CurseForgePack>(token, "GET", `/curseforge/mods/${cf[1]}`),
+        api<CurseForgeFile[]>(token, "GET", `/curseforge/mods/${cf[1]}/files`),
+      ])
+        .then(([pack, files]) => {
+          const file = files.find((f) => String(f.id) === cf[2]);
+          setInstalled({
+            title: pack.name,
+            url: pack.url,
+            site: "CurseForge",
+            icon: pack.logo,
+            details: file ? `${file.name} · ${cfVersions(file)}` : `File ${cf[2]}`,
+            curseforge: pack,
+          });
+        })
+        .catch((err) => setError(`Couldn't read the modpack from CurseForge: ${(err as Error).message}`));
+      return;
+    }
     modrinth<PackVersion>(`/version/${current}`)
-      .then(async (version) => setInstalled({ version, project: await modrinth<PackProject>(`/project/${version.project_id}`) }))
+      .then(async (version) => {
+        const project = await modrinth<PackProject>(`/project/${version.project_id}`);
+        setInstalled({
+          title: project.title,
+          url: `https://modrinth.com/modpack/${project.slug}`,
+          site: "Modrinth",
+          icon: project.icon_url,
+          details: `Version ${version.version_number} · Minecraft ${version.game_versions.join(", ")} · ${loaderLabel[serverLoader(version)] ?? "Vanilla"}`,
+          modrinth: project,
+        });
+      })
       .catch((err) => setError(`Couldn't read the modpack from Modrinth: ${(err as Error).message}`));
-  }, [current]);
+  }, [current, token]);
 
-  async function install(v: PackVersion, title: string) {
+  // install saves the pack as the server's modpack and reinstalls it. The
+  // agent reads the real Minecraft version and loader from the pack.
+  async function install(modpack: string, title: string, mc: string, packLoader: string) {
     const ok = window.confirm(
-      `Install ${title} ${v.version_number} on ${instance.name}?\n\nThis sets Minecraft ${v.game_versions[0]} with ${loaderLabel[serverLoader(v)] ?? "no loader"} and replaces the mods from any previous pack. The world stays, but mods that change can break it, so make a backup first if you care about it.`,
+      `Install ${title} on ${instance.name}?\n\nThis sets Minecraft ${mc || "to the pack's version"} with ${loaderLabel[packLoader] ?? "the pack's loader"} and replaces the mods from any previous pack. The world stays, but mods that change can break it, so make a backup first if you care about it.`,
     );
     if (!ok) return;
     setError("");
     try {
-      await api(token, "PUT", `/instances/${instance.id}/settings`, {
-        modpack: v.id,
-        loader: serverLoader(v),
-        version: v.game_versions[0],
-      });
+      await api(token, "PUT", `/instances/${instance.id}/settings`, { modpack, loader: packLoader, version: mc || "latest" });
       await api(token, "POST", `/instances/${instance.id}/install`);
-      setMessage(`Installing ${title}. Follow along on the Console tab.`);
+      setMessage(`Installing ${title}. Follow along on the Console tab; big packs take a few minutes.`);
       onChanged();
     } catch (err) {
       setError((err as Error).message);
     }
   }
+  const installModrinth = (v: PackVersion, title: string) =>
+    install(v.id, `${title} ${v.version_number}`, v.game_versions[0], serverLoader(v));
+  const installCurseForge = (pack: CurseForgePack, f: CurseForgeFile) =>
+    install(`cf:${pack.id}:${f.id}`, f.name, f.gameVersions.find((v) => /^\d/.test(v)) ?? "", cfLoader(f));
 
   async function removePack() {
     if (!window.confirm("Stop using this modpack? Press Update afterwards to remove its mods. The world and configs stay.")) return;
@@ -507,9 +564,9 @@ function Modpacks({ token, instance, onChanged }: { token: string; instance: Ins
   return (
     <div className="mods">
       <p className="muted">
-        Install a modpack from Modrinth and Watchtower sets up the Minecraft version and mod loader it needs, downloads its server mods, and
-        keeps them in step when you pick a newer version. To run a loader with your own mods instead, pick the loader under Settings and put
-        the mods in the <code>mods</code> folder with the File Manager.
+        Install a modpack from Modrinth or CurseForge and Watchtower sets up the Minecraft version and mod loader it needs, downloads its
+        server files, and keeps them in step when you pick a newer version. To run a loader with your own mods instead, pick the loader
+        under Settings and put the mods in the <code>mods</code> folder with the File Manager.
       </p>
       {!stopped && (
         <p className="notice">
@@ -523,18 +580,15 @@ function Modpacks({ token, instance, onChanged }: { token: string; instance: Ins
       {current ? (
         installed ? (
           <div className="mod-card pack current">
-            <PackIcon url={installed.project.icon_url} />
+            <PackIcon url={installed.icon} />
             <div className="mod-body">
               <div className="mod-title">
-                <strong>{installed.project.title}</strong>
-                <a href={`https://modrinth.com/modpack/${installed.project.slug}`} target="_blank" rel="noreferrer">
-                  Modrinth <ExternalLink size={12} />
+                <strong>{installed.title}</strong>
+                <a href={installed.url} target="_blank" rel="noreferrer">
+                  {installed.site} <ExternalLink size={12} />
                 </a>
               </div>
-              <div className="muted">
-                Version {installed.version.version_number} · Minecraft {installed.version.game_versions.join(", ")} ·{" "}
-                {loaderLabel[serverLoader(installed.version)] ?? "Vanilla"}
-              </div>
+              <div className="muted">{installed.details}</div>
             </div>
             <div className="mod-actions">
               <button className="danger" onClick={removePack} disabled={!stopped}>
@@ -543,7 +597,7 @@ function Modpacks({ token, instance, onChanged }: { token: string; instance: Ins
             </div>
           </div>
         ) : (
-          <p className="muted">Modpack version {current}</p>
+          <p className="muted">Modpack {current}</p>
         )
       ) : (
         <p className="muted">
@@ -551,18 +605,48 @@ function Modpacks({ token, instance, onChanged }: { token: string; instance: Ins
           {loader === "vanilla" ? "(vanilla)" : `on ${loaderLabel[loader] ?? loader}`}.
         </p>
       )}
-      {installed && (
+      {installed?.modrinth && (
         <PackVersions
-          project={installed.project}
+          project={installed.modrinth}
           currentVersion={current}
           disabled={!stopped}
-          onInstall={(v) => install(v, installed.project.title)}
+          onInstall={(v) => installModrinth(v, installed.title)}
+          label="Change version"
+        />
+      )}
+      {installed?.curseforge && (
+        <CurseForgeVersions
+          token={token}
+          pack={installed.curseforge}
+          current={current}
+          disabled={!stopped}
+          onInstall={(f) => installCurseForge(installed.curseforge!, f)}
           label="Change version"
         />
       )}
 
       <h3 className="section-title">Find a modpack</h3>
-      <PackSearch disabled={!stopped} onInstall={install} />
+      <div className="segmented" role="tablist">
+        <button className={site === "modrinth" ? "active" : ""} onClick={() => setSite("modrinth")}>
+          Modrinth
+        </button>
+        <button className={site === "curseforge" ? "active" : ""} onClick={() => setSite("curseforge")}>
+          CurseForge
+        </button>
+      </div>
+      {site === "modrinth" ? (
+        <PackSearch disabled={!stopped} onInstall={installModrinth} />
+      ) : curseForgeKey ? (
+        <CurseForgeSearch token={token} disabled={!stopped} onInstall={installCurseForge} />
+      ) : (
+        <p className="notice">
+          CurseForge only lets apps search with an API key. It's free: sign in at{" "}
+          <a href="https://console.curseforge.com" target="_blank" rel="noreferrer">
+            console.curseforge.com
+          </a>
+          , open API Keys, and have an admin paste the key under Settings here.
+        </p>
+      )}
     </div>
   );
 }
@@ -723,6 +807,170 @@ function PackVersions({
       >
         <Package size={16} /> {currentVersion ? "Install this version" : "Install"}
       </button>
+    </div>
+  );
+}
+
+// cfLoader guesses a CurseForge version's loader from its tags. The agent
+// reads the exact one from the pack's manifest when it installs.
+function cfLoader(f: CurseForgeFile) {
+  const tags = f.gameVersions.map((v) => v.toLowerCase());
+  return ["neoforge", "forge", "fabric", "quilt"].find((l) => tags.includes(l)) ?? "vanilla";
+}
+
+const cfVersions = (f: CurseForgeFile) =>
+  [f.gameVersions.find((v) => /^\d/.test(v)) && `Minecraft ${f.gameVersions.find((v) => /^\d/.test(v))}`, loaderLabel[cfLoader(f)]]
+    .filter(Boolean)
+    .join(" · ");
+
+// CurseForgeSearch searches CurseForge through the panel, which holds the API key.
+function CurseForgeSearch({
+  token,
+  disabled,
+  onInstall,
+}: {
+  token: string;
+  disabled: boolean;
+  onInstall: (pack: CurseForgePack, f: CurseForgeFile) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [packs, setPacks] = useState<CurseForgePack[] | null>(null);
+  const [open, setOpen] = useState<number | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const search = useCallback(
+    async (q: string) => {
+      setBusy(true);
+      setError("");
+      try {
+        const found = await api<CurseForgePack[]>(token, "GET", `/curseforge/search?q=${encodeURIComponent(q)}`);
+        setPacks(found);
+        setOpen(found.length === 1 && q.includes("curseforge.com") ? found[0].id : null);
+      } catch (err) {
+        setError((err as Error).message);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [token],
+  );
+  useEffect(() => {
+    search("");
+  }, [search]);
+
+  return (
+    <div className="mod-add">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          search(query.trim());
+        }}
+      >
+        <label className="search">
+          <Search size={16} />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search CurseForge, or paste a curseforge.com link"
+            aria-label="Search CurseForge modpacks"
+          />
+        </label>
+        <button type="submit" disabled={busy}>
+          {busy ? "Searching…" : "Search"}
+        </button>
+      </form>
+      {error && <p className="error">{error}</p>}
+      {packs && packs.length === 0 && <p className="muted">No modpacks match.</p>}
+      <ul className="mod-list">
+        {packs?.map((p) => (
+          <li key={p.id} className="mod-card pack">
+            <PackIcon url={p.logo} />
+            <div className="mod-body">
+              <div className="mod-title">
+                <strong>{p.name}</strong>
+                {p.author && <span className="muted">by {p.author}</span>}
+                <span className="muted">{p.downloads.toLocaleString()} downloads</span>
+                <a href={p.url} target="_blank" rel="noreferrer">
+                  CurseForge <ExternalLink size={12} />
+                </a>
+              </div>
+              <p className="setting-desc">{p.summary}</p>
+              {open === p.id && (
+                <CurseForgeVersions token={token} pack={p} disabled={disabled} onInstall={(f) => onInstall(p, f)} label="Version" />
+              )}
+            </div>
+            {open !== p.id && (
+              <div className="mod-actions">
+                <button onClick={() => setOpen(p.id)}>Choose</button>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function CurseForgeVersions({
+  token,
+  pack,
+  current,
+  disabled,
+  onInstall,
+  label,
+}: {
+  token: string;
+  pack: CurseForgePack;
+  current?: string;
+  disabled: boolean;
+  onInstall: (f: CurseForgeFile) => void;
+  label: string;
+}) {
+  const [files, setFiles] = useState<CurseForgeFile[] | null>(null);
+  const [picked, setPicked] = useState("");
+  const [error, setError] = useState("");
+  const currentFile = current?.split(":")[2];
+
+  useEffect(() => {
+    api<CurseForgeFile[]>(token, "GET", `/curseforge/mods/${pack.id}/files`).then(
+      (f) => {
+        setFiles(f);
+        setPicked(String((f.find((x) => x.serverPack) ?? f[0])?.id ?? ""));
+      },
+      (err) => setError((err as Error).message),
+    );
+  }, [token, pack.id]);
+
+  const file = useMemo(() => files?.find((f) => String(f.id) === picked), [files, picked]);
+  if (error) return <p className="error">{error}</p>;
+  if (!files) return <p className="muted small">Loading versions…</p>;
+  if (files.length === 0) return <p className="muted small">This pack has no versions.</p>;
+  return (
+    <div className="pack-versions">
+      <label>
+        {label}
+        <select value={picked} onChange={(e) => setPicked(e.target.value)}>
+          {files.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.name}
+              {f.releaseType !== "release" ? ` (${f.releaseType})` : ""}
+              {f.serverPack ? "" : " (no server files)"}
+              {String(f.id) === currentFile ? " (installed)" : ""}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button
+        className="primary"
+        disabled={disabled || !file || !file.serverPack || String(file.id) === currentFile}
+        onClick={() => file && onInstall(file)}
+      >
+        <Package size={16} /> {current ? "Install this version" : "Install"}
+      </button>
+      {file && !file.serverPack && (
+        <p className="muted small">This version has no server files on CurseForge, so it can't run as a server. Pick another version.</p>
+      )}
     </div>
   );
 }

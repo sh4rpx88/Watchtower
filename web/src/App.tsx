@@ -1082,16 +1082,18 @@ function ServerDetailsForm({ token, instance, onSaved }: { token: string; instan
 
 function PanelSettingsPage({ token, value, onSaved }: { token: string; value: SettingsResponse; onSaved: () => void }) {
   const [settings, setSettings] = useState<PanelSettings>(value.settings);
+  const [cfKey, setCfKey] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   useEffect(() => setSettings(value.settings), [value.settings]);
 
-  async function save(e: FormEvent) {
-    e.preventDefault();
+  async function save(e: FormEvent | null, extra: Record<string, unknown> = {}) {
+    e?.preventDefault();
     setError("");
     setMessage("");
     try {
-      await api(token, "PUT", "/settings", settings);
+      await api(token, "PUT", "/settings", { ...settings, curseforgeKey: cfKey.trim(), ...extra });
+      setCfKey("");
       setMessage("Saved.");
       onSaved();
     } catch (err) {
@@ -1127,6 +1129,32 @@ function PanelSettingsPage({ token, value, onSaved }: { token: string; value: Se
           />
         </label>
         <p className="muted">The machine's IP on your network, for people playing from home.</p>
+        <h3 className="section-title">CurseForge</h3>
+        <label>
+          CurseForge API key
+          <input
+            type="password"
+            autoComplete="off"
+            value={cfKey}
+            onChange={(e) => setCfKey(e.target.value)}
+            placeholder={value.hasCurseForgeKey ? "Saved. Paste a new key to replace it" : "Paste your key"}
+          />
+        </label>
+        <p className="muted">
+          Lets the Mods tab search and install CurseForge modpacks like All the Mods. Get a free key at{" "}
+          <a href="https://console.curseforge.com" target="_blank" rel="noreferrer">
+            console.curseforge.com
+          </a>{" "}
+          under API Keys. It stays on the panel and is never shown again.
+          {value.hasCurseForgeKey && (
+            <>
+              {" "}
+              <button type="button" className="link" onClick={() => save(null, { clearCurseForgeKey: true })}>
+                Remove the key
+              </button>
+            </>
+          )}
+        </p>
         <button type="submit" className="primary">
           Save settings
         </button>
@@ -1168,7 +1196,7 @@ function ServerView({
   onBack: () => void;
   onChanged: () => void;
 }) {
-  const { timeZone } = useContext(SettingsContext);
+  const { timeZone, hasCurseForgeKey } = useContext(SettingsContext);
   const { act, busy, error, canInstall, canStart, canStop, canRestart } = useActions(token, instance, onChanged);
   const perms = usePerms();
   const s = instance.state;
@@ -1247,7 +1275,7 @@ function ServerView({
             perms.manage &&
             template?.mods &&
             (installed && instance.agentOnline ? (
-              <Mods token={token} instance={instance} template={template} onChanged={onChanged} />
+              <Mods token={token} instance={instance} template={template} curseForgeKey={!!hasCurseForgeKey} onChanged={onChanged} />
             ) : (
               <p className="muted">Install the server and keep its machine online to manage mods.</p>
             ))}

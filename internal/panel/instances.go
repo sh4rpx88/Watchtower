@@ -145,7 +145,11 @@ func (s *Server) spec(in Instance) (protocol.InstanceSpec, error) {
 		return protocol.InstanceSpec{}, fmt.Errorf("game template %q is no longer available", in.TemplateID)
 	}
 	// Fill in defaults for fields added to the template after the instance was created.
-	return protocol.InstanceSpec{ID: in.ID, Name: in.Name, Template: tpl, Settings: tpl.Settings(in.Settings), Ports: in.Ports}, nil
+	spec := protocol.InstanceSpec{ID: in.ID, Name: in.Name, Template: tpl, Settings: tpl.Settings(in.Settings), Ports: in.Ports}
+	if tpl.Mods != nil && tpl.Mods.Kind == "modrinth" {
+		spec.CurseForgeKey = s.panelSettings().CurseForgeKey
+	}
+	return spec, nil
 }
 
 // handleAction runs install, start, stop, or command on an instance's agent.

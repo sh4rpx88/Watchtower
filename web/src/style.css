@@ -439,3 +439,7 @@ a.button { color: var(--text) !important; text-decoration: none; }
   .mod-thumb { width: 48px; height: 48px; }
   .mod-actions { width: 100%; justify-content: flex-end; }
 }
+.segmented { display: inline-flex; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; width: fit-content; }
+.segmented button { border: none; border-radius: 0; background: #0d0c0d; padding: 7px 16px; }
+.segmented button + button { border-left: 1px solid var(--line); }
+.segmented button.active { background: #2a1216; color: #f0e6df; box-shadow: inset 0 -2px 0 var(--red-bright); }

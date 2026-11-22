@@ -142,6 +142,13 @@ its `.mrpack`, sets up the Minecraft version and loader it names, downloads its 
 overrides, and removes files an earlier version of the pack had that the new one dropped. Clearing `modpack` and
 installing again removes the pack's files but keeps worlds and configs.
 
+`modpack` can also be `cf:<projectId>:<fileId>` for a CurseForge pack, which needs a CurseForge API key in the panel
+settings (`PUT /settings` with `curseforgeKey`; it is never returned, `GET /settings` only says `hasCurseForgeKey`, and
+`clearCurseForgeKey: true` removes it). Install reads the Minecraft version and loader from the pack's `manifest.json`,
+then unpacks the version's official server pack, keeping an existing `server.properties`, whitelist and ops and never
+touching `world/`. Only versions with server files can be installed. The Mods tab searches through
+`GET /curseforge/search?q=`, `GET /curseforge/mods/{modId}` and `GET /curseforge/mods/{modId}/files`.
+
 ## API tokens
 
 Create tokens on the dashboard under **Integrations**, or with `POST /tokens {"name", "scope"}` (admin only; the secret

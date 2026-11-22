@@ -34,6 +34,7 @@ type Config struct {
 	DiscordAPI     string // Discord REST and gateway addresses; empty uses the real ones (tests point them elsewhere)
 	DiscordGateway string
 	SteamAPI       string // Steam Web API address; empty uses the real one
+	CurseForgeAPI  string // CurseForge API address; empty uses the real one
 }
 
 type Server struct {
@@ -143,6 +144,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/instances/{id}/mods", manage(s.handleMods))
 	mux.HandleFunc("POST /api/v1/instances/{id}/mods/lookup", manage(s.handleLookupMods))
 	mux.HandleFunc("PUT /api/v1/instances/{id}/mods", manage(logged("changed the mods: {note}", s.handleUpdateMods)))
+	mux.HandleFunc("GET /api/v1/curseforge/search", manage(s.handleCurseForgeSearch))
+	mux.HandleFunc("GET /api/v1/curseforge/mods/{modId}", manage(s.handleCurseForgePack))
+	mux.HandleFunc("GET /api/v1/curseforge/mods/{modId}/files", manage(s.handleCurseForgeFiles))
 	mux.HandleFunc("GET /api/v1/instances/{id}/files", manage(s.handleListFiles))
 	mux.HandleFunc("DELETE /api/v1/instances/{id}/files", manage(logged("deleted {path}", s.handleDeleteFile)))
 	mux.HandleFunc("POST /api/v1/instances/{id}/files/mkdir", manage(logged("made the folder {path}", s.handleMkdir)))

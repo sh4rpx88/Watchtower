@@ -26,8 +26,9 @@ import (
 // mcSources are the services a Minecraft install talks to. Tests point them
 // at a local server.
 var mcSources = struct {
-	Mojang, Modrinth, Fabric, Quilt, Forge, ForgePromos, NeoForge string
-	PackHosts                                                     []string // hosts modpack files may be downloaded from
+	Mojang, Modrinth, Fabric, Quilt, Forge, ForgePromos, NeoForge, CurseForge string
+	PackHosts                                                                 []string // hosts Modrinth pack files may be downloaded from
+	CurseForgeHosts                                                           []string // hosts CurseForge files are downloaded from
 }{
 	Mojang:      "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json",
 	Modrinth:    "https://api.modrinth.com",
@@ -36,8 +37,10 @@ var mcSources = struct {
 	Forge:       "https://maven.minecraftforge.net",
 	ForgePromos: "https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json",
 	NeoForge:    "https://maven.neoforged.net",
+	CurseForge:  "https://api.curseforge.com",
 	// The hosts Modrinth allows in .mrpack files.
-	PackHosts: []string{"cdn.modrinth.com", "github.com", "raw.githubusercontent.com", "gitlab.com"},
+	PackHosts:       []string{"cdn.modrinth.com", "github.com", "raw.githubusercontent.com", "gitlab.com"},
+	CurseForgeHosts: []string{"edge.forgecdn.net", "mediafilez.forgecdn.net", "mediafiles.forgecdn.net"},
 }
 
 const (
@@ -68,7 +71,14 @@ func (d DockerRuntime) installMinecraft(ctx context.Context, spec protocol.Insta
 	version = strings.TrimSpace(version)
 	loader, loaderVersion := vars["loader"], ""
 	var pack *mrpack
-	if id := strings.TrimSpace(vars["modpack"]); id != "" {
+	var cf *cfPack
+	if id := strings.TrimSpace(vars["modpack"]); strings.HasPrefix(id, "cf:") {
+		if cf, err = d.fetchCurseForge(ctx, spec.CurseForgeKey, id, dir, out); err != nil {
+			return err
+		}
+		defer os.Remove(cf.zipPath)
+		version, loader, loaderVersion = cf.MC, cf.Loader, cf.LoaderVersion
+	} else if id != "" {
 		if pack, err = d.fetchModpack(ctx, id, dir, out); err != nil {
 			return err
 		}
@@ -91,12 +101,19 @@ func (d DockerRuntime) installMinecraft(ctx context.Context, spec protocol.Insta
 	if err != nil {
 		return err
 	}
-	if pack != nil {
+	switch {
+	case pack != nil:
 		if err := d.applyModpack(ctx, dir, pack, out); err != nil {
 			return err
 		}
-	} else if err := removeModpack(dir, out); err != nil {
-		return err
+	case cf != nil:
+		if err := applyServerPack(dir, cf, out); err != nil {
+			return err
+		}
+	default:
+		if err := removeModpack(dir, out); err != nil {
+			return err
+		}
 	}
 	if err := os.WriteFile(filepath.Join(dir, launchFile), []byte(launch+"\n"), 0o644); err != nil {
 		return err
@@ -110,6 +127,9 @@ func (d DockerRuntime) installMinecraft(ctx context.Context, spec protocol.Insta
 	}
 	if pack != nil {
 		what = pack.Name + " (" + what + ")"
+	}
+	if cf != nil {
+		what = cf.Name + " (" + what + ")"
 	}
 	out(fmt.Sprintf("%s installed (needs Java %d)", what, rel.Java))
 	return nil
@@ -537,8 +557,13 @@ func (d DockerRuntime) applyModpack(ctx context.Context, dir string, pack *mrpac
 		return err
 	}
 
-	// Drop files from the previous pack that this version no longer has,
-	// such as mods it updated to a new file name.
+	return recordPack(dir, pack.Name, keep, out)
+}
+
+// recordPack drops files from the previous pack that this version no longer
+// has, such as mods it updated to a new file name, and remembers this
+// version's files for next time.
+func recordPack(dir, name string, keep map[string]bool, out func(string)) error {
 	for _, old := range readModpackManifest(dir) {
 		if !keep[old] {
 			if p, err := packPath(dir, old); err == nil && os.Remove(p) == nil {
@@ -551,7 +576,7 @@ func (d DockerRuntime) applyModpack(ctx context.Context, dir string, pack *mrpac
 		files = append(files, f)
 	}
 	slices.Sort(files)
-	data, _ := json.MarshalIndent(map[string]any{"name": pack.Name, "versionId": pack.VersionID, "files": files}, "", "  ")
+	data, _ := json.MarshalIndent(map[string]any{"name": name, "files": files}, "", "  ")
 	return os.WriteFile(filepath.Join(dir, modpackManifest), data, 0o644)
 }
 

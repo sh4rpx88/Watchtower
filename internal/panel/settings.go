@@ -15,6 +15,9 @@ type PanelSettings struct {
 	// network.
 	PublicAddress string `json:"publicAddress"`
 	LANAddress    string `json:"lanAddress"`
+	// CurseForgeKey lets Watchtower search and download CurseForge modpacks.
+	// It is never sent back to the browser.
+	CurseForgeKey string `json:"curseforgeKey,omitempty"`
 }
 
 func (s *Server) panelSettings() PanelSettings {
@@ -34,8 +37,16 @@ func timeZone() string {
 	return fmt.Sprintf("%s (UTC%s)", name, offset)
 }
 
+// settingsView is the settings as the browser sees them, without secrets.
+func (s *Server) settingsView() map[string]any {
+	ps := s.panelSettings()
+	hasKey := ps.CurseForgeKey != ""
+	ps.CurseForgeKey = ""
+	return map[string]any{"settings": ps, "timeZone": timeZone(), "hasCurseForgeKey": hasKey}
+}
+
 func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"settings": s.panelSettings(), "timeZone": timeZone()})
+	writeJSON(w, http.StatusOK, s.settingsView())
 }
 
 // cleanAddress accepts a host name or IP with nothing else in it.
@@ -48,9 +59,23 @@ func cleanAddress(v string) (string, error) {
 }
 
 func (s *Server) handleUpdateSettingsPanel(w http.ResponseWriter, r *http.Request) {
-	var body PanelSettings
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	var req struct {
+		PanelSettings
+		ClearCurseForgeKey bool `json:"clearCurseForgeKey"` // an empty key keeps the saved one
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	body := req.PanelSettings
+	body.CurseForgeKey = strings.TrimSpace(body.CurseForgeKey)
+	switch {
+	case req.ClearCurseForgeKey:
+		body.CurseForgeKey = ""
+	case body.CurseForgeKey == "":
+		body.CurseForgeKey = s.panelSettings().CurseForgeKey
+	case strings.ContainsAny(body.CurseForgeKey, " \t\r\n") || len(body.CurseForgeKey) > 200:
+		writeError(w, http.StatusBadRequest, "that doesn't look like a CurseForge API key")
 		return
 	}
 	var err error
@@ -65,7 +90,7 @@ func (s *Server) handleUpdateSettingsPanel(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, body)
+	writeJSON(w, http.StatusOK, s.settingsView())
 }
 
 // handleUpdateInstance renames a server or sets the address players use.

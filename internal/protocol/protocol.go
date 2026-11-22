@@ -94,6 +94,9 @@ type InstanceSpec struct {
 	Template templates.Template `json:"template"`
 	Settings map[string]string  `json:"settings"`
 	Ports    map[string]int     `json:"ports"` // template port name -> host port
+	// CurseForgeKey is the panel's CurseForge API key, sent to games with
+	// modpacks so the agent can download CurseForge packs.
+	CurseForgeKey string `json:"curseforgeKey,omitempty"`
 }
 
 type InstanceRef struct {
